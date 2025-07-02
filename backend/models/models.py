@@ -2,6 +2,8 @@
 
 from datetime import datetime, timedelta
 from models import db
+from werkzeug.security import generate_password_hash, check_password_hash
+
 
 class User(db.Model):
     __tablename__ = "users"
@@ -25,7 +27,13 @@ class User(db.Model):
             "dob": self.dob.isoformat() if self.dob else None,
             "is_admin": self.is_admin
         }
-
+    @property
+    def password(self):
+        raise AttributeError("Use set_password()")
+    def set_password(self, raw):
+        self.password_hash = generate_password_hash(raw)
+    def check_password(self, raw):
+        return check_password_hash(self.password_hash, raw)
 
 class Subject(db.Model):
     __tablename__ = "subjects"
