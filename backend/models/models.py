@@ -1,7 +1,7 @@
 # backend/models/models.py
 
 from datetime import datetime, timedelta
-from models import db
+from . import db
 from werkzeug.security import generate_password_hash, check_password_hash
 
 
@@ -16,24 +16,30 @@ class User(db.Model):
     dob           = db.Column(db.Date)
     is_admin      = db.Column(db.Boolean, default=False)
 
-    scores = db.relationship("Score", back_populates="user", cascade="all, delete-orphan")
+    scores = db.relationship(
+        "Score", back_populates="user", cascade="all, delete-orphan"
+    )
 
-    def serialize(self):
+    def to_dict(self):
         return {
             "id": self.id,
             "email": self.email,
             "full_name": self.full_name,
             "qualification": self.qualification,
             "dob": self.dob.isoformat() if self.dob else None,
-            "is_admin": self.is_admin
+            "is_admin": self.is_admin,
         }
+
     @property
     def password(self):
-        raise AttributeError("Use set_password()")
-    def set_password(self, raw):
-        self.password_hash = generate_password_hash(raw)
-    def check_password(self, raw):
-        return check_password_hash(self.password_hash, raw)
+        raise AttributeError("Use set_password() to set the user password.")
+
+    def set_password(self, raw_password):
+        self.password_hash = generate_password_hash(raw_password)
+
+    def check_password(self, raw_password):
+        return check_password_hash(self.password_hash, raw_password)
+
 
 class Subject(db.Model):
     __tablename__ = "subjects"
@@ -42,14 +48,12 @@ class Subject(db.Model):
     name        = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text)
 
-    chapters = db.relationship("Chapter", back_populates="subject", cascade="all, delete-orphan")
+    chapters = db.relationship(
+        "Chapter", back_populates="subject", cascade="all, delete-orphan"
+    )
 
-    def serialize(self):
-        return {
-            "id": self.id,
-            "name": self.name,
-            "description": self.description
-        }
+    def to_dict(self):
+        return {"id": self.id, "name": self.name, "description": self.description}
 
 
 class Chapter(db.Model):
@@ -61,44 +65,49 @@ class Chapter(db.Model):
     description = db.Column(db.Text)
 
     subject = db.relationship("Subject", back_populates="chapters")
-    quizzes = db.relationship("Quiz", back_populates="chapter", cascade="all, delete-orphan")
+    quizzes = db.relationship(
+        "Quiz", back_populates="chapter", cascade="all, delete-orphan"
+    )
 
-    def serialize(self):
+    def to_dict(self):
         return {
             "id": self.id,
             "subject_id": self.subject_id,
             "name": self.name,
-            "description": self.description
+            "description": self.description,
         }
-
 
 class Quiz(db.Model):
     __tablename__ = "quizzes"
 
-    id           = db.Column(db.Integer, primary_key=True)
-    chapter_id   = db.Column(db.Integer, db.ForeignKey("chapters.id"), nullable=False)
-    date_of_quiz = db.Column(db.Date, nullable=False)
-    duration     = db.Column(db.Interval, default=timedelta(minutes=0))
-    remarks      = db.Column(db.Text)
+    id          = db.Column(db.Integer, primary_key=True)
+    chapter_id  = db.Column(db.Integer, db.ForeignKey("chapters.id"), nullable=False)
 
-    chapter   = db.relationship("Chapter", back_populates="quizzes")
-    questions = db.relationship("Question", back_populates="quiz", cascade="all, delete-orphan")
-    scores    = db.relationship("Score", back_populates="quiz", cascade="all, delete-orphan")
+    name        = db.Column(db.String(255), nullable=False)
+    description = db.Column(db.Text)
+    duration    = db.Column(db.Interval, default=timedelta(minutes=0), nullable=False)
+    deadline    = db.Column(db.Date, nullable=False)
+    remarks     = db.Column(db.Text)
 
-    def serialize(self, include_questions=False, include_scores=False):
+    chapter     = db.relationship("Chapter", back_populates="quizzes")
+    questions   = db.relationship("Question", back_populates="quiz", cascade="all, delete-orphan")
+    scores      = db.relationship("Score", back_populates="quiz", cascade="all, delete-orphan")
+
+    def to_dict(self, include_questions=False, include_scores=False):
         data = {
             "id": self.id,
             "chapter_id": self.chapter_id,
-            "date_of_quiz": self.date_of_quiz.isoformat(),
+            "name": self.name,
+            "description": self.description,
             "duration": str(self.duration),
-            "remarks": self.remarks
+            "deadline": self.deadline.isoformat() if self.deadline else None,
+            "remarks": self.remarks,
         }
         if include_questions:
-            data["questions"] = [q.serialize() for q in self.questions]
+            data["questions"] = [q.to_dict() for q in self.questions]
         if include_scores:
-            data["scores"] = [s.serialize() for s in self.scores]
+            data["scores"] = [s.to_dict() for s in self.scores]
         return data
-
 
 class Question(db.Model):
     __tablename__ = "questions"
@@ -110,11 +119,11 @@ class Question(db.Model):
     option2            = db.Column(db.String(255), nullable=False)
     option3            = db.Column(db.String(255), nullable=False)
     option4            = db.Column(db.String(255), nullable=False)
-    correct_option     = db.Column(db.Integer, nullable=False)  # 1–4
+    correct_option     = db.Column(db.Integer, nullable=False)
 
     quiz = db.relationship("Quiz", back_populates="questions")
 
-    def serialize(self):
+    def to_dict(self):
         return {
             "id": self.id,
             "quiz_id": self.quiz_id,
@@ -123,7 +132,7 @@ class Question(db.Model):
             "option2": self.option2,
             "option3": self.option3,
             "option4": self.option4,
-            "correct_option": self.correct_option
+            "correct_option": self.correct_option,
         }
 
 
@@ -139,11 +148,28 @@ class Score(db.Model):
     quiz = db.relationship("Quiz", back_populates="scores")
     user = db.relationship("User", back_populates="scores")
 
-    def serialize(self):
+    def to_dict(self):
         return {
             "id": self.id,
             "quiz_id": self.quiz_id,
             "user_id": self.user_id,
             "timestamp": self.timestamp.isoformat(),
-            "total_score": self.total_score
+            "total_score": self.total_score,
+        }
+
+class ActivityLog(db.Model):
+    __tablename__ = "activity_logs"
+
+    id      = db.Column(db.Integer, primary_key=True)
+    type    = db.Column(db.String(50), nullable=False)  # e.g. 'registration', 'subject_created'
+    user    = db.Column(db.String(120), nullable=True)   # person who did it (admin or user)
+    message = db.Column(db.Text, nullable=True)          # human-readable message
+    when    = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "type": self.type,
+            "user": self.user,
+            "message": self.message,
+            "when": self.when.isoformat()
         }

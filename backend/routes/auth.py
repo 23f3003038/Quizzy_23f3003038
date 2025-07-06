@@ -1,24 +1,23 @@
 #backend/routes/auth.py
 
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity,verify_jwt_in_request
 from app import db
-from models import User
+from models import User, ActivityLog
 from datetime import datetime
 
 auth_bp = Blueprint("auth", __name__)
 
 @auth_bp.route('/register', methods=['POST'])
 def register():
-    data = request.get_json()
-    if not data:
-        return jsonify(msg='No input data provided'), 400
-
+    data = request.get_json() or {}
     email     = data.get('email')
     password  = data.get('password')
     full_name = data.get('full_name')
+    
+    # Basic validation
     if not email or not password or not full_name:
-        return jsonify(msg='Missing email, password, or full_name'), 400
+        return jsonify(msg='Email, password, and full_name are required'), 400
 
     if User.query.filter_by(email=email).first():
         return jsonify(msg='Email already registered'), 400
@@ -31,7 +30,8 @@ def register():
             dob = datetime.strptime(dob_str, '%Y-%m-%d').date()
         except ValueError:
             return jsonify(msg='Invalid dob format; use YYYY-MM-DD'), 400
-
+        
+    # Create user
     user = User(
         email=email,
         full_name=full_name,
@@ -44,7 +44,23 @@ def register():
     db.session.add(user)
     db.session.commit()
 
+    # Log the activity
+    log = ActivityLog(
+        type="registration",
+        user=user.full_name,
+        message=f"New user '{user.full_name}' registered."
+    )
+    db.session.add(log)
+    db.session.commit()
+
+    # Generate JWT for new user
+    access_token = create_access_token(
+        identity=str(user.id),
+        additional_claims={"is_admin": False}
+    )
+
     return jsonify(
+        access_token=access_token,
         id=user.id,
         email=user.email,
         full_name=user.full_name
@@ -52,25 +68,34 @@ def register():
 
 @auth_bp.route("/login", methods=["POST"])
 def login():
-    data = request.get_json()
-    if not data or not data.get('email') or not data.get('password'):
+    data = request.get_json() or {}
+    email = data.get('email')
+    password = data.get('password')
+
+    if not email or not password:
         return jsonify(msg='Missing email or password'), 400
-    
-    user = User.query.filter_by(email=data.get("email")).first()
-    if not user or not user.check_password(data.get("password")):
+
+    user = User.query.filter_by(email=email).first()
+    if not user or not user.check_password(password):
         return jsonify({"msg": "Bad credentials"}), 401
 
-    # additional claims: is_admin
-    additional_claims = {"is_admin": user.is_admin}
-    access_token = create_access_token(identity=str(user.id), additional_claims=additional_claims)
+    access_token = create_access_token(
+        identity=str(user.id),
+        additional_claims={"is_admin": user.is_admin}
+    )
 
     return jsonify(access_token=access_token), 200
 
-@auth_bp.route("/me", methods=["GET"])
-@jwt_required()
+
+@auth_bp.route("/me", methods=["GET", "OPTIONS"])
 def me():
+    if request.method == "OPTIONS":
+        return '', 200  # respond to preflight
+
+    verify_jwt_in_request()  # manually verify since we didn’t use @jwt_required
     user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
+    user = User.query.get_or_404(user_id)
+
     return jsonify({
         "id": user.id,
         "email": user.email,
