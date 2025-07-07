@@ -1,7 +1,7 @@
 // frontend/src/router/index.js
 
 import { createRouter, createWebHistory } from 'vue-router'
-import Landing from '@/views/landing.vue'
+import Landing from '@/views/Landing.vue'
 import Login from '@/components/auth/Login.vue'
 import Register from '@/components/auth/Register.vue'
 import AdminLayout from '@/components/admin/admin-layout.vue'
@@ -17,6 +17,15 @@ import upcomingQuiz from '@/components/admin/upcoming-quiz.vue'
 import subjectDetails from '@/components/admin/subject-details.vue'
 import chapterDetails from '@/components/admin/chapter-details.vue'
 import quizDetails from '@/components/admin/quiz-details.vue'
+import userLayout from '@/components/user/user-layout.vue'
+import userDashboard from '@/components/user/user-dashboard.vue'
+import userSubjectList from '@/components/user/user-subject-list.vue'
+import userSubjectDetails from '@/components/user/user-subject-details.vue'
+import userChapterDetails from '@/components/user/user-chapter-details.vue'
+import userQuizDetails from '@/components/user/user-quiz-details.vue'
+import userQuizInstructions from '@/components/user/user-quiz-instructions.vue'
+import userQuizAttempt from '@/components/user/user-quiz-attempt.vue'
+import userQuizResult from '@/components/user/user-quiz-result.vue'
 
 const routes = [
   { path: '/', name: 'landing', component: Landing },
@@ -44,6 +53,24 @@ const routes = [
     ]
   },
 
+  {
+    path: '/user',
+    name: 'user',
+    component: userLayout,
+    meta: { requiresAuth: true, role: 'user' },
+    children: [
+      { path: '', name: 'user-dashboard', component: userDashboard },
+      { path: 'dashboard', name: 'user-dashboard-alias', component: userDashboard},
+      { path: 'subjects', name: 'UserSubjects', component: userSubjectList},
+      { path: 'subjects/:id', name: 'UserSubjectDetails', component: userSubjectDetails},
+      { path: 'chapters/:id/details', name: 'UserChapterDetails', component: userChapterDetails, props: true },
+      { path: 'quiz/:quizId',  name: 'UserQuizDetails', component: userQuizDetails},
+      { path: 'quiz/:quizid/attempt', name: 'UserQuizAttemptInstructions', component: userQuizInstructions, props: true},
+      { path: 'quiz/:quizId/attempt/live', name: 'UserQuizAttempt', component: userQuizAttempt, props: true},
+      { path: 'quiz/:quizId/result', name: 'UserQuizResult', component: userQuizResult, props: true}
+    ]
+  },
+
   // fallback
   { path: '/:pathMatch(.*)*', redirect: '/' }
 ]
@@ -62,9 +89,15 @@ router.beforeEach((to, from, next) => {
   if (to.meta.requiresAuth && !token) {
     return next({ name: 'login' })
   }
+
   if (to.meta.role === 'admin' && user?.is_admin !== true) {
-    return next({ name: 'home' })
+    return next({ name: 'user-dashboard' }) // 🚫 block user from admin area
   }
+
+  if (to.meta.role === 'user' && user?.is_admin === true) {
+    return next({ name: 'admin-dashboard' }) // 🚫 block admin from user area
+  }
+
   next()
 })
 
