@@ -108,7 +108,7 @@ onBeforeUnmount(() => {
 
 function fetchQuizData() {
   axios.get(`/api/user/quizzes/${quizId}`).then(res => {
-    console.log("Raw quiz question:", res.data.questions)
+    // console.log("Raw quiz question:", res.data.questions)
 
     questions.value = res.data.questions.map(q => {
       const options = [q.option1, q.option2, q.option3, q.option4].filter(Boolean)
@@ -161,7 +161,7 @@ function submitQuiz(auto = false) {
 
   axios.post(`/api/user/quizzes/${quizId}/submit`, payload)
     .then(res => {
-      console.log("✅ Quiz submitted. Feedback:", res.data)
+      // console.log("✅ Quiz submitted. Feedback:", res.data)
 
       if (auto) {
         alert("⏰ Time's up! Your quiz was auto-submitted.")

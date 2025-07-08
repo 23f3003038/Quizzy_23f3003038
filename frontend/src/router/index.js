@@ -26,6 +26,7 @@ import userQuizDetails from '@/components/user/user-quiz-details.vue'
 import userQuizInstructions from '@/components/user/user-quiz-instructions.vue'
 import userQuizAttempt from '@/components/user/user-quiz-attempt.vue'
 import userQuizResult from '@/components/user/user-quiz-result.vue'
+import userQuizReport from '@/components/user/user-quiz-report.vue'
 
 const routes = [
   { path: '/', name: 'landing', component: Landing },
@@ -67,7 +68,8 @@ const routes = [
       { path: 'quiz/:quizId',  name: 'UserQuizDetails', component: userQuizDetails},
       { path: 'quiz/:quizid/attempt', name: 'UserQuizAttemptInstructions', component: userQuizInstructions, props: true},
       { path: 'quiz/:quizId/attempt/live', name: 'UserQuizAttempt', component: userQuizAttempt, props: true},
-      { path: 'quiz/:quizId/result', name: 'UserQuizResult', component: userQuizResult, props: true}
+      { path: 'quiz/:quizId/result', name: 'UserQuizResult', component: userQuizResult, props: true},
+      { path: 'report/:scoreId', name: 'UserQuizReport', component: userQuizReport, props: true}
     ]
   },
 

@@ -38,17 +38,17 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="quiz in history" :key="quiz.id">
-            <td>{{ quiz.title }}</td>
-            <td>{{ quiz.score }}%</td>
-            <td>{{ quiz.accuracy }}%</td>
-            <td>{{ quiz.completed_at }}</td>
-            <td>
-              <button class="btn btn-sm btn-outline-primary" @click="viewReport(quiz.id)">
-                View
-              </button>
-            </td>
-          </tr>
+        <tr v-for="attempt in history" :key="attempt.id">
+          <td>{{ attempt.title }}</td>
+          <td>{{ attempt.score }}</td>
+          <td>{{ attempt.accuracy }}</td>
+          <td>{{ attempt.completed_at_ist }}</td>
+          <td>
+            <button class="btn btn-sm btn-outline-primary" @click="viewReport(attempt.id)">
+              View
+            </button>
+          </td>
+        </tr>
           <tr v-if="history.length === 0">
             <td colspan="5" class="text-center text-muted">No quiz history found.</td>
           </tr>
@@ -64,6 +64,18 @@ import axios from 'axios'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
+
+function formatToIST(utcString) {
+  const date = new Date(utcString)
+  return date.toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
 
 const user = ref({
   name: '',
@@ -88,7 +100,7 @@ function fetchDashboardData() {
       { label: 'Quizzes Taken', value: data.total_quizzes || 0 },
       { label: 'Avg. Score', value: data.average_score + '%' },
       { label: 'Accuracy', value: data.accuracy + '%' },
-      { label: 'Last Active', value: data.last_active || '-' },
+      { label: 'Last Active', value: data.last_active ? formatToIST(data.last_active) : '-' },
     ]
     user.value = {
       name: data.full_name,
@@ -105,14 +117,20 @@ function fetchDashboardData() {
 
 function fetchHistory() {
   axios.get('/api/user/history').then(res => {
-    history.value = res.data
+    history.value = res.data.map(item => ({
+      ...item,
+      completed_at_ist: formatToIST(item.completed_at)
+    }))
+      console.log('Formatted history:', history.value)
+
   }).catch(err => {
     console.error('❌ Failed to load history', err)
   })
 }
 
-function viewReport(quizId) {
-  router.push(`/user/report/${quizId}`)
+function viewReport(scoreId) {
+  console.log('Navigating to report with scoreId:', scoreId)
+  router.push(`/user/report/${scoreId}`)
 }
 
 onMounted(() => {

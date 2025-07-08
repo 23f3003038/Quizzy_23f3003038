@@ -5,7 +5,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
 
 from app import db
-from models import User, Subject, Chapter, Quiz, Question, Score
+from models import User, Subject, Chapter, Quiz, Question, Score, UserAnswer
 
 user_bp = Blueprint("user", __name__, url_prefix="/api/user")
 
@@ -38,8 +38,38 @@ def get_user_dashboard():
         "total_quizzes": total_quizzes,
         "average_score": average_score,
         "accuracy": accuracy,
-        "last_active": last_active.isoformat() if last_active else None
+        "last_active": last_active.isoformat() + 'Z' if last_active else None
     }), 200
+
+@user_bp.route("/history", methods=["GET"])
+@jwt_required()
+def get_quiz_history():
+    user_id = get_jwt_identity()
+    scores = (
+        Score.query
+        .filter_by(user_id=user_id)
+        .order_by(Score.timestamp.desc())
+        .all()
+    )
+
+    result = []
+    for score in scores:
+        quiz = score.quiz
+        chapter = quiz.chapter
+        subject = chapter.subject
+        total_questions = len(quiz.questions)
+        accuracy = round((score.total_score / total_questions) * 100, 2) if total_questions else 0
+
+        result.append({
+            "id": score.id,
+            "quiz_id": quiz.id,
+            "title": f"{subject.name} / {chapter.name} / {quiz.name}",
+            "score": f"{score.total_score} / {total_questions}",
+            "accuracy": f"{accuracy}%",
+            "completed_at": score.timestamp.isoformat() + 'Z',
+        })
+
+    return jsonify(result), 200
 
 @user_bp.route("/subjects", methods=["GET"])
 @jwt_required()
@@ -189,6 +219,8 @@ def submit_quiz(quiz_id):
     Expects JSON body:
       { "answers": [ {"question_id": 1, "selected": 2}, ... ] }
     """
+    from models import UserAnswer  # Make sure this is imported at the top
+
     user_id = get_jwt_identity()
     data = request.get_json() or {}
     answers = data.get("answers", [])
@@ -212,7 +244,7 @@ def submit_quiz(quiz_id):
                 "is_correct": is_correct
             })
 
-    # Record the score
+    # Save score
     score = Score(
         quiz_id=quiz_id,
         user_id=user_id,
@@ -220,6 +252,17 @@ def submit_quiz(quiz_id):
         total_score=total_correct
     )
     db.session.add(score)
+    db.session.flush()  # Get score.id before commit
+
+    # Save user answers
+    for ans in answers:
+        user_answer = UserAnswer(
+            score_id=score.id,
+            question_id=ans.get("question_id"),
+            selected=ans.get("selected")
+        )
+        db.session.add(user_answer)
+
     db.session.commit()
 
     return jsonify({
@@ -272,6 +315,7 @@ def get_quiz_result(quiz_id):
         "user_id": user_id,
         "total_score": score.total_score,
         "total_questions": len(quiz.questions),
+        "completed_at": score.timestamp.isoformat() + "Z",
         "questions": detailed_results
     }), 200
 
@@ -296,3 +340,47 @@ def get_my_scores():
         }
         for s in scores
     ]), 200
+
+@user_bp.route("/scores/<int:score_id>/report", methods=["GET"])
+@jwt_required()
+def get_report_by_score(score_id):
+    """
+    Get detailed quiz report for a specific score (attempt).
+    """
+    user_id = get_jwt_identity()
+    score = Score.query.get_or_404(score_id)
+
+    if int(score.user_id) != int(user_id):
+        return jsonify({"error": "Unauthorized"}), 403
+
+    quiz = Quiz.query.get_or_404(score.quiz_id)
+    chapter = Chapter.query.get_or_404(quiz.chapter_id)
+    subject = Subject.query.get_or_404(chapter.subject_id)
+
+    detailed_results = []
+    for q in quiz.questions:
+        selected_answer = next((
+            ans.selected for ans in score.answers if ans.question_id == q.id
+        ), None) if hasattr(score, 'answers') else None
+
+        detailed_results.append({
+            "question_id": q.id,
+            "question_statement": q.question_statement,
+            "options": [q.option1, q.option2, q.option3, q.option4],
+            "selected": selected_answer,
+            "correct_option": q.correct_option,
+            "is_correct": selected_answer == q.correct_option
+        })
+
+    return jsonify({
+        "score_id": score.id,
+        "quiz_id": quiz.id,
+        "quiz_name": quiz.name,
+        "chapter_name": chapter.name,
+        "subject_name": subject.name,
+        "user_id": user_id,
+        "total_score": score.total_score,
+        "total_questions": len(quiz.questions),
+        "completed_at": score.timestamp.isoformat() + "Z",
+        "questions": detailed_results
+    }), 200

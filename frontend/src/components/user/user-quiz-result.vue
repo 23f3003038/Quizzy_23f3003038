@@ -65,7 +65,7 @@ onMounted(() => {
 function fetchResult() {
   axios.get(`/api/user/quizzes/${quizId}/result`)
     .then(res => {
-        console.log("✅ Result API response:", res.data)
+        // console.log("✅ Result API response:", res.data)
         const data = res.data
 
         score.value.correct = data.total_score

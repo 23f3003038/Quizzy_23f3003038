@@ -60,10 +60,10 @@ function goToInstructions() {
 }
 
 function fetchQuizDetails() {
-  console.log("📌 Fetching quiz details for ID:", quizId)
+  // console.log("📌 Fetching quiz details for ID:", quizId)
 
   axios.get(`/api/user/quizzes/${quizId}`).then(res => {
-    console.log("✅ Quiz data:", res.data)
+    // console.log("✅ Quiz data:", res.data)
     quiz.value = {
         ...res.data,
         questions: res.data.questions || []
@@ -71,11 +71,11 @@ function fetchQuizDetails() {
 
     axios.get(`/api/user/chapters/${res.data.chapter_id}`).then(chapterRes => {
       chapterName.value = chapterRes.data.name
-      console.log("📘 Chapter data:", chapterRes.data)
+      // console.log("📘 Chapter data:", chapterRes.data)
 
       axios.get(`/api/user/subjects/${chapterRes.data.subject_id}`).then(subjectRes => {
         subjectName.value = subjectRes.data.name
-        console.log("📗 Subject data:", subjectRes.data)
+        // console.log("📗 Subject data:", subjectRes.data)
       }).catch(err => console.error("❌ Subject fetch error:", err.response?.data || err.message))
     }).catch(err => console.error("❌ Chapter fetch error:", err.response?.data || err.message))
   }).catch(err => {

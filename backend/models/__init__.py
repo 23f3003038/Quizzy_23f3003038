@@ -5,7 +5,7 @@ from datetime import datetime
 
 db = SQLAlchemy()
 
-from .models import User, Subject, Chapter, Quiz, Question, Score
+from .models import User, Subject, Chapter, Quiz, Question, Score, UserAnswer
 
 class ActivityLog(db.Model):
     __tablename__ = 'activity_logs'
@@ -31,5 +31,6 @@ __all__ = [
     "Quiz",
     "Question",
     "Score",
-    "ActivityLog"
+    "ActivityLog",
+    "UserAnswer"
 ]
