@@ -2,7 +2,7 @@
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app import db
 from models import User, Subject, Chapter, Quiz, Question, Score, UserAnswer
@@ -190,7 +190,8 @@ def get_quiz_by_id(quiz_id):
         "name": quiz.name,
         "description": quiz.description,
         "duration": str(quiz.duration),
-        "deadline": quiz.deadline.isoformat() if quiz.deadline else None,
+        "date_of_quiz": quiz.date_of_quiz.isoformat() + 'Z' if quiz.date_of_quiz else None,
+        "deadline": quiz.deadline.isoformat() + 'Z' if quiz.deadline else None,
         "remarks": quiz.remarks,
         "questions": [q.to_dict() for q in quiz.questions]
     }), 200
@@ -214,16 +215,24 @@ def get_quiz_questions(quiz_id):
 @user_bp.route("/quizzes/<int:quiz_id>/submit", methods=["POST"])
 @jwt_required()
 def submit_quiz(quiz_id):
-    """
-    Submit answers for a quiz and record the score.
-    Expects JSON body:
-      { "answers": [ {"question_id": 1, "selected": 2}, ... ] }
-    """
-    from models import UserAnswer  # Make sure this is imported at the top
+    # Submit answers for a quiz and record the score.
 
     user_id = get_jwt_identity()
     data = request.get_json() or {}
     answers = data.get("answers", [])
+
+    quiz = Quiz.query.get_or_404(quiz_id)
+    now = datetime.now(timezone.utc)
+
+    # 🔒 Enforce time restrictions
+    if quiz.date_of_quiz and now < quiz.date_of_quiz.replace(tzinfo=timezone.utc):
+        return jsonify({"error": "⏳ Quiz is not yet available."}), 403
+
+    if quiz.deadline and now > quiz.deadline.replace(tzinfo=timezone.utc):
+        return jsonify({"error": "⛔ Quiz deadline has passed."}), 403
+    
+    if not quiz.date_of_quiz or not quiz.deadline:
+        return jsonify({"error": "Quiz timing is not configured."}), 400
 
     total_correct = 0
     detailed_results = []

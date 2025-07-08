@@ -22,8 +22,13 @@
       </ul>
     </div>
 
+    <!-- Availability Message -->
+    <div v-if="!isAvailable" class="alert alert-warning mt-3">
+      ⏳ This quiz can only be attempted before <strong>{{ formatDate(quiz.deadline) }}</strong>.
+    </div>
+
     <!-- Start Button -->
-    <button class="btn btn-primary mt-4" @click="startQuiz">
+    <button class="btn btn-primary mt-4" @click="startQuiz" :disabled="!isAvailable">
       Start Quiz
     </button>
   </div>
@@ -38,6 +43,7 @@ const route = useRoute()
 const router = useRouter()
 const quizId = route.params.quizid
 const quiz = ref({})
+const isAvailable = ref(true)
 
 function goBack() {
   router.back()
@@ -49,6 +55,29 @@ function formatDuration(durationStr) {
   return `${parseInt(h)}h ${parseInt(m)}m`
 }
 
+function formatDate(utc) {
+  if (!utc) return "N/A"
+  const date = new Date(utc)
+  return date.toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+function checkAvailability(dateStr, deadlineStr) {
+  if (!dateStr || !deadlineStr) return false
+
+  const now = new Date()
+  const start = new Date(dateStr)  // already in UTC
+  const end = new Date(deadlineStr)
+
+  return now >= start && now <= end
+}
+
 function startQuiz() {
   router.push(`/user/quiz/${quizId}/attempt/live`)
 }
@@ -57,6 +86,7 @@ onMounted(() => {
   axios.get(`/api/user/quizzes/${quizId}`)
     .then(res => {
       quiz.value = res.data
+      isAvailable.value = checkAvailability(quiz.value.date_of_quiz, quiz.value.deadline)
     })
     .catch(err => {
       console.error('❌ Failed to fetch quiz data:', err.response?.data || err.message)

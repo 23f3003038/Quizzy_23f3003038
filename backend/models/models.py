@@ -84,7 +84,8 @@ class Quiz(db.Model):
     name = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text)
     duration = db.Column(db.Interval, default=timedelta(minutes=0), nullable=False)
-    deadline = db.Column(db.Date, nullable=False)
+    date_of_quiz = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    deadline = db.Column(db.DateTime, nullable=False)
     remarks = db.Column(db.Text)
 
     chapter = db.relationship("Chapter", back_populates="quizzes")
