@@ -66,7 +66,7 @@
     <ChapterForm 
       v-if="showChapterForm" 
       :chapter="editingChapter" 
-      :subjectId="subjectId" 
+      :subjectId="Number(subjectId)"
       :subject-name="subject?.name"
       @saved="fetchChapters" 
       @close="showChapterForm = false"

@@ -150,6 +150,7 @@ def get_quiz_by_id(id):
         "subject_name": subject.name if subject else None
     }), 200
 
+import traceback
 @admin_bp.route("/chapters/<int:chapter_id>/quizzes", methods=["POST"])
 @require_admin
 def create_quiz(chapter_id):
@@ -167,11 +168,19 @@ def create_quiz(chapter_id):
             return jsonify({"error": "Name, duration, and deadline are required."}), 400
 
         # Parse duration (HH:MM)
-        h, m= map(int, duration_str.split(":"))
-        duration = timedelta(hours=h, minutes=m)
+        parts = list(map(int, duration_str.split(":")))
+        if len(parts) == 2:
+            h, m = parts
+            s = 0
+        elif len(parts) == 3:
+            h, m, s = parts
+        else:
+            return jsonify({"error": "Invalid duration format. Use HH:MM or HH:MM:SS"}), 400
+
+        duration = timedelta(hours=h, minutes=m, seconds=s)
 
         # Parse deadline (YYYY-MM-DD)
-        deadline = datetime.strptime(deadline_str, "%Y-%m-%d").date()
+        deadline = datetime.strptime(deadline_str, "%Y-%m-%d")
 
         quiz = Quiz(
             chapter_id=chapter_id,
@@ -238,7 +247,7 @@ def modify_quiz(id):
             quiz.duration = timedelta(hours=h, minutes=m, seconds=s)
 
             # Parse deadline
-            quiz.deadline = datetime.strptime(deadline_str, "%Y-%m-%d").date()
+            quiz.deadline = datetime.strptime(deadline_str[:10], "%Y-%m-%d").date()
 
             quiz.name = name
             quiz.description = description

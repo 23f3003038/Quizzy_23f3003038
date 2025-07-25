@@ -46,7 +46,7 @@
             <td>{{ index + 1 }}</td>
             <td>{{ quiz.name }}</td>
             <td>{{ quiz.duration }}</td>
-            <td>{{ quiz.deadline }}</td>
+            <td>{{ quiz.deadline?.substring(0, 10) }}</td>
             <td>
               <button class="btn btn-sm btn-outline-primary me-1" @click="viewQuiz(quiz)">View</button>
               <button class="btn btn-sm btn-outline-secondary me-1" @click="openQuizForm(quiz)">Edit</button>

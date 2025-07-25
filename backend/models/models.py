@@ -99,7 +99,7 @@ class Quiz(db.Model):
             "name": self.name,
             "description": self.description,
             "duration": str(self.duration),
-            "deadline": self.deadline.isoformat() if self.deadline else None,
+            "deadline": self.deadline.strftime("%Y-%m-%d") if self.deadline else None,
             "remarks": self.remarks,
         }
         if include_questions:
