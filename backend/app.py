@@ -3,11 +3,13 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
 from config import Config
-from models import db, User
-from flask_jwt_extended import JWTManager
+from models import User
+from extensions import db, jwt, mail
+from celery import Celery
+from celery_app import init_celery
+from dotenv import load_dotenv
 
-
-jwt = JWTManager()
+load_dotenv()
 
 
 def create_app():
@@ -17,6 +19,9 @@ def create_app():
     # Initialize extensions
     db.init_app(app)
     jwt.init_app(app)
+    mail.init_app(app)
+
+    init_celery(app)
 
     CORS(
     app,
@@ -37,6 +42,14 @@ def create_app():
     # User routes
     from routes.user import user_bp
     app.register_blueprint(user_bp, url_prefix="/api/user")
+
+    @app.after_request
+    def apply_cors_headers(response):
+        response.headers["Access-Control-Allow-Origin"] = "http://localhost:5173"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+        return response
 
 
     return app

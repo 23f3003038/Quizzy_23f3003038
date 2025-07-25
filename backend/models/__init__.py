@@ -1,9 +1,7 @@
 # backend/models/__init__.py
 
-from flask_sqlalchemy import SQLAlchemy
+from extensions import db
 from datetime import datetime
-
-db = SQLAlchemy()
 
 from .models import User, Subject, Chapter, Quiz, Question, Score, UserAnswer
 

@@ -421,13 +421,13 @@ def list_users():
 @admin_bp.route("/recent-activity", methods=["GET"])
 @require_admin
 def recent_activity():
-    logs = ActivityLog.query.order_by(ActivityLog.when.desc()).limit(10).all()
+    logs = ActivityLog.query.order_by(ActivityLog.timestamp.desc()).limit(10).all()
     return jsonify([
         {
             "type": log.type,
             "user": log.user,
             "message": log.message,
-            "when": log.when.isoformat()
+            "timestamp": log.timestamp.isoformat() if log.timestamp else None
         }
         for log in logs
     ]), 200

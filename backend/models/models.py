@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from . import db
+from extensions import db
 from werkzeug.security import generate_password_hash, check_password_hash
 
 
@@ -175,15 +175,18 @@ class ActivityLog(db.Model):
     __tablename__ = "activity_logs"
 
     id = db.Column(db.Integer, primary_key=True)
-    type = db.Column(db.String(50), nullable=False)  # e.g. 'registration', 'subject_created'
-    user = db.Column(db.String(120), nullable=True)  # person who did it (admin or user)
-    message = db.Column(db.Text, nullable=True)      # human-readable message
-    when = db.Column(db.DateTime, default=datetime.utcnow)
+    type = db.Column(db.String(50), nullable=False)
+    user = db.Column(db.String(120), nullable=True)
+    quiz = db.Column(db.String(120), nullable=True)
+    quiz_name = db.Column(db.String(255), nullable=True)
+    admin = db.Column(db.String(120), nullable=True)
+    message = db.Column(db.Text, nullable=True)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
         return {
             "type": self.type,
             "user": self.user,
             "message": self.message,
-            "when": self.when.isoformat()
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None
         }
