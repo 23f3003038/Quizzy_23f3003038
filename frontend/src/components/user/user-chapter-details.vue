@@ -36,8 +36,8 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="quiz in quizzes" :key="quiz.id">
-            <td>Quiz {{ quiz.id }}</td>
+          <tr v-for="quiz in filteredQuizzes" :key="quiz.id">
+            <td>{{ quiz.name || `Quiz ${quiz.id}` }}</td>
             <td>{{ quiz.deadline?.split('T')[0] }}</td>
             <td>{{ quiz.duration_minutes }} min</td>
             <td>{{ quiz.remarks }}</td>
@@ -47,8 +47,8 @@
               </button>
             </td>
           </tr>
-          <tr v-if="quizzes.length === 0">
-            <td colspan="4" class="text-center text-muted">No quizzes found.</td>
+          <tr v-if="filteredQuizzes.length === 0">
+            <td colspan="5" class="text-center text-muted">No quizzes found.</td>
           </tr>
         </tbody>
       </table>
@@ -57,7 +57,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref, computed } from 'vue'
+import { onMounted, ref, computed, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 
@@ -67,6 +67,7 @@ const route = useRoute()
 const chapterId = route.params.id
 const chapter = ref({})
 const quizzes = ref([])
+const filteredQuizzes = ref([])
 
 const chapterInitials = computed(() => {
   const name = chapter.value?.name || ''
@@ -90,13 +91,30 @@ function fetchChapterDetails() {
   axios.get(`/api/user/chapters/${chapterId}`).then(res => {
     chapter.value = res.data
     quizzes.value = res.data.quizzes || []
+    filteredQuizzes.value = res.data.quizzes || []
   }).catch(err => {
     console.error('❌ Failed to fetch chapter details', err.response?.data || err.message)
   })
 }
 
+// ✅ Search listener
+function handleSearch(e) {
+  const term = e.detail.value.toLowerCase()
+  filteredQuizzes.value = quizzes.value.filter(quiz => {
+    const name = (quiz.name || `Quiz ${quiz.id}`)?.toLowerCase()
+    const remarks = quiz.remarks?.toLowerCase() || ''
+    const deadline = quiz.deadline ? quiz.deadline.split('T')[0].toLowerCase() : ''
+    return name.includes(term) || remarks.includes(term) || deadline.includes(term)
+  })
+}
+
 onMounted(() => {
   fetchChapterDetails()
+  window.addEventListener('user-search', handleSearch)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('user-search', handleSearch)
 })
 </script>
 
@@ -117,5 +135,9 @@ onMounted(() => {
     background: #337665;
     color: #fac126;
     border-color: #337665
+}
+
+.table  th{
+  font-weight: bold
 }
 </style>

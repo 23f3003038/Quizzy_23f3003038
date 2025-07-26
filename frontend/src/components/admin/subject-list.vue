@@ -11,9 +11,21 @@
 
     <!-- Subject Cards Grid -->
     <div class="row mb-4 gy-5">
-      <div class="col-md-4 mb-3" style="padding:0.5rem" v-for="s in filteredSubjects" :key="s.id" >
+      <div v-if="filteredSubjects.length === 0" class="text-center text-muted py-5">
+        No results found.
+      </div>
+
+      <div
+        class="col-md-4 mb-3"
+        style="padding:0.5rem"
+        v-for="s in filteredSubjects"
+        :key="s.id"
+      >
         <div class="card shadow-sm subject-card" @click="goToChapters(s)">
-          <div class="subject-image" :style="{ backgroundImage: `url('/Subjectbg.png')` }" >
+          <div
+            class="subject-image"
+            :style="{ backgroundImage: `url('/Subjectbg.png')` }"
+          >
             <div class="subject-name-overlay">
               <span>{{ s.name }}</span>
             </div>

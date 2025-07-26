@@ -45,7 +45,12 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(question, index) in questions" :key="question.id">
+          <tr v-if="filteredQuestions.length === 0">
+            <td colspan="4" class="text-center text-muted py-4">
+              No results found.
+            </td>
+          </tr>
+          <tr v-for="(question, index) in filteredQuestions" :key="question.id">
             <td>{{ index + 1 }}</td>
             <td>{{ question.question_statement }}</td>
             <td>{{ question['option' + question.correct_option] }}</td>
@@ -58,7 +63,6 @@
       </table>
     </div>
 
-    <!-- Question Form -->
     <!-- Question Form -->
     <QuestionForm
       v-if="showQuestionForm"
@@ -85,7 +89,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import QuestionForm from './question-form.vue'
-import QuizForm from './quiz-form.vue' // ✅ newly added
+import QuizForm from './quiz-form.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -93,6 +97,7 @@ const router = useRouter()
 const quizId = route.params.id
 const quiz = ref(null)
 const questions = ref([])
+const filteredQuestions = ref([])
 
 const subjectName = ref('')
 const chapterName = ref('')
@@ -134,6 +139,7 @@ function fetchSubject(subjectId) {
 function fetchQuestions() {
   axios.get(`/api/admin/quizzes/${quizId}/questions`).then(res => {
     questions.value = res.data
+    filteredQuestions.value = res.data
   })
 }
 
@@ -160,6 +166,18 @@ function deleteQuiz() {
 onMounted(() => {
   fetchQuiz()
   fetchQuestions()
+
+  // Global search listener - now only filters by question and correct answer
+  window.addEventListener('admin-search', (e) => {
+    const term = e.detail.value.toLowerCase()
+    filteredQuestions.value = questions.value.filter(q => {
+      const correctAnswer = q['option' + q.correct_option]?.toLowerCase() || ''
+      return (
+        q.question_statement?.toLowerCase().includes(term) ||
+        correctAnswer.includes(term)
+      )
+    })
+  })
 })
 </script>
 
@@ -180,5 +198,9 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   user-select: none;
+}
+
+.table  th{
+  font-weight: bold
 }
 </style>

@@ -42,7 +42,12 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(quiz, index) in quizzes" :key="quiz.id">
+          <tr v-if="filteredQuizzes.length === 0">
+            <td colspan="5" class="text-center text-muted py-4">
+               No results found.
+            </td>
+          </tr>
+          <tr v-for="(quiz, index) in filteredQuizzes" :key="quiz.id">
             <td>{{ index + 1 }}</td>
             <td>{{ quiz.name }}</td>
             <td>{{ quiz.duration }}</td>
@@ -91,6 +96,7 @@ const router = useRouter()
 
 const chapter = ref(null)
 const quizzes = ref([])
+const filteredQuizzes = ref([])
 const subjectName = ref(null)
 
 const showChapterForm = ref(false)
@@ -117,7 +123,6 @@ function goBack() {
 function fetchChapter() {
   axios.get(`/api/admin/chapters/${chapterId}`)
     .then(res => {
-      console.log("✅ Chapter fetched:", res.data)
       chapter.value = res.data
       fetchSubjectName(res.data.subject_id)
     })
@@ -127,10 +132,8 @@ function fetchChapter() {
 }
 
 function fetchSubjectName(subjectId) {
-  console.log("📌 Fetching subject name for:", subjectId)
   axios.get(`/api/admin/subjects/${subjectId}`)
     .then(res => {
-      console.log("✅ Subject fetched:", res.data)
       subjectName.value = res.data.name
     })
     .catch(err => {
@@ -141,6 +144,7 @@ function fetchSubjectName(subjectId) {
 function fetchQuizzes() {
   axios.get(`/api/admin/chapters/${chapterId}/quizzes`).then(res => {
     quizzes.value = res.data
+    filteredQuizzes.value = res.data
   })
 }
 
@@ -150,9 +154,8 @@ function openQuizForm(quiz = null) {
 }
 
 function deleteQuiz(id) {
-    axios.delete(`/api/admin/quizzes/${id}`).then(fetchQuizzes)
-  }
-
+  axios.delete(`/api/admin/quizzes/${id}`).then(fetchQuizzes)
+}
 
 function openChapterForm(chap = null) {
   editingChapter.value = chap
@@ -160,10 +163,10 @@ function openChapterForm(chap = null) {
 }
 
 function deleteChapter() {
-    axios.delete(`/api/admin/chapters/${chapterId}`).then(() => {
-      router.push(`/admin/subjects/${chapter.value.subject_id}`)
-    })
-  }
+  axios.delete(`/api/admin/chapters/${chapterId}`).then(() => {
+    router.push(`/admin/subjects/${chapter.value.subject_id}`)
+  })
+}
 
 function viewQuiz(quiz) {
   router.push(`/admin/quizzes/${quiz.id}/details`)
@@ -172,6 +175,15 @@ function viewQuiz(quiz) {
 onMounted(() => {
   fetchChapter()
   fetchQuizzes()
+
+  // 🌐 Global search support for quizzes
+  window.addEventListener('admin-search', (e) => {
+    const term = e.detail.value.toLowerCase()
+    filteredQuizzes.value = quizzes.value.filter(quiz =>
+      quiz.name?.toLowerCase().includes(term) ||
+      quiz.deadline?.toLowerCase().includes(term)
+    )
+  })
 })
 </script>
 
@@ -190,5 +202,9 @@ onMounted(() => {
 }
 .cursor-pointer {
   cursor: pointer;
+}
+
+.table  th{
+  font-weight: bold
 }
 </style>

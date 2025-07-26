@@ -11,14 +11,14 @@
     </div>
 
     <!-- Subject Info Box -->
-    <div class="d-flex align-items-start gap-3 mb-4 p-3 border rounded shadow-sm ">
+    <div class="d-flex align-items-start gap-3 mb-4 p-3 border rounded shadow-sm">
       <div class="initials-box">{{ initials }}</div>
       <div>
         <h4 class="mb-1">{{ subject?.name }}</h4>
         <p class="text-muted">{{ subject?.description }}</p>
         <div class="d-flex gap-2">
           <button class="btn btn-sm btn-secondary" @click="openForm">Edit</button>
-            <button class="btn btn-sm btn-danger" @click="removeSubject">Delete</button>
+          <button class="btn btn-sm btn-danger" @click="removeSubject">Delete</button>
         </div>
       </div>
     </div>
@@ -29,11 +29,11 @@
     </div>
 
     <!-- Total Chapters -->
-    <div class="mb-2 fw-bold">Total Chapters: {{ chapters.length }}</div>
+    <div class="mb-2 fw-bold">Total Chapters: {{ filteredChapters.length }}</div>
 
     <!-- Chapters Table -->
     <div class="table-responsive">
-      <table class="table table-hover">
+      <table class="table table-hover" v-if="filteredChapters.length > 0">
         <thead>
           <tr>
             <th>Chapter Name</th>
@@ -43,7 +43,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="chap in chapters" :key="chap.id">
+          <tr v-for="chap in filteredChapters" :key="chap.id">
             <td>{{ chap.name }}</td>
             <td>{{ chap.description }}</td>
             <td>{{ chap.quizCount }}</td>
@@ -55,7 +55,14 @@
           </tr>
         </tbody>
       </table>
+
+      <!-- No Results -->
+      <div v-else class="text-center text-muted py-4">
+        No results found.
+      </div>
     </div>
+
+    <!-- Forms -->
     <SubjectForm 
       v-if="showSubjectForm" 
       :subject="subject" 
@@ -79,20 +86,20 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 
-// Forms (create these components separately)
 import SubjectForm from './subject-form.vue'
 import ChapterForm from './chapter-form.vue'
 
 const route = useRoute()
 const router = useRouter()
+const subjectId = route.params.id
+
 const subject = ref(null)
 const chapters = ref([])
+const filteredChapters = ref([])
 
 const showSubjectForm = ref(false)
 const showChapterForm = ref(false)
 const editingChapter = ref(null)
-
-const subjectId = route.params.id
 
 const initials = computed(() => {
   if (!subject.value?.name) return ""
@@ -114,15 +121,15 @@ function fetchSubject() {
   })
 }
 
-function fetchChapters() {
-  axios.get(`/api/admin/subjects/${subjectId}/chapters`).then(async res => {
-    const chaps = res.data
-    for (const c of chaps) {
-      const qres = await axios.get(`/api/admin/chapters/${c.id}/quizzes`)
-      c.quizCount = qres.data.length
-    }
-    chapters.value = chaps
-  })
+async function fetchChapters() {
+  const res = await axios.get(`/api/admin/subjects/${subjectId}/chapters`)
+  const chaps = res.data
+  for (const c of chaps) {
+    const qres = await axios.get(`/api/admin/chapters/${c.id}/quizzes`)
+    c.quizCount = qres.data.length
+  }
+  chapters.value = chaps
+  filteredChapters.value = chaps
 }
 
 function openForm() {
@@ -155,6 +162,15 @@ function deleteChapter(id) {
 onMounted(() => {
   fetchSubject()
   fetchChapters()
+
+  // Listen to global search event
+  window.addEventListener('admin-search', (e) => {
+    const term = e.detail.value.toLowerCase()
+    filteredChapters.value = chapters.value.filter(chap =>
+      chap.name?.toLowerCase().includes(term) ||
+      chap.description?.toLowerCase().includes(term)
+    )
+  })
 })
 </script>
 
@@ -175,5 +191,9 @@ onMounted(() => {
 
 .cursor-pointer {
   cursor: pointer;
+}
+
+.table  th{
+  font-weight: bold
 }
 </style>

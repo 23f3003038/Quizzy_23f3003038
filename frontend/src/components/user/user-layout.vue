@@ -20,7 +20,12 @@
       <!-- Topbar -->
       <header class="topbar d-flex justify-content-between align-items-center px-4 py-3">
         <div class="left">
-          <input type="text" placeholder="Search..." class="search-input" />
+          <input
+              v-model="searchTerm"
+              type="text"
+              class="form-control border-start-0 no-focus-outline"
+              placeholder="Search..."
+            />
         </div>
         <div class="right d-flex align-items-center gap-2">
           <img src="/logo.png" alt="Logo" class="topbar-logo" />
@@ -37,9 +42,17 @@
 </template>
 
 <script setup>
+import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
+const searchTerm = ref('') 
+
+// Emit search term globally for listening components
+watch(searchTerm, (val) => {
+  const routeName = router.currentRoute.value.name
+  window.dispatchEvent(new CustomEvent('user-search', { detail: { value: val, route: routeName } }))
+})
 
 function logout() {
   router.push('/login')
@@ -53,10 +66,8 @@ function logout() {
   font-family: 'Segoe UI', sans-serif;
 }
 
-/* Sidebar */
 .sidebar {
   width: 220px;
-  /* background: linear-gradient(to bottom, #2b7a78, #3aafa9); */
   background: linear-gradient(to bottom, #337665, #7baa73, #fac126);
   color: white;
   display: flex;
@@ -67,25 +78,6 @@ function logout() {
 .sidebar-header {
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
-
-/* .nav-links {
-  flex: 1;
-  gap: 10px;
-  align-items: center;
-}
-
-.nav-item {
-  padding: 10px 15px;
-  color: white;
-  text-decoration: none;
-  border-radius: 4px;
-  font-weight: 500;
-  transition: background-color 0.2s;
-}
-
-.nav-item:hover {
-  background-color: #535c5879;
-} */
 
 .nav-links {
   flex: 1;
@@ -117,9 +109,7 @@ function logout() {
   cursor: pointer;
 }
 
-/* Topbar */
 .topbar {
-  /* background: linear-gradient(to right, #3aafa9, #2b7a78); */
   background: linear-gradient(to right, #337665, #7baa73, #fac126);
   color: white;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
@@ -133,13 +123,11 @@ function logout() {
   outline: none;
 }
 
-/* Logo */
 .topbar-logo {
   height: 36px;
   width: auto;
 }
 
-/* Content Area */
 .main-container {
   flex: 1;
   overflow-y: auto;

@@ -6,43 +6,61 @@
 
     <!-- Subject Cards -->
     <div class="row g-4">
-      <div class="col-md-4" v-for="subject in subjects" :key="subject.id">
-        <div class="subject-card shadow-sm rounded overflow-hidden" @click="goToSubjectDetails(subject.id)">
+      <div
+        class="col-md-4"
+        v-for="subject in filteredSubjects"
+        :key="subject.id"
+      >
+        <div
+          class="subject-card shadow-sm rounded overflow-hidden"
+          @click="goToSubjectDetails(subject.id)"
+        >
           <!-- Image with overlay -->
           <div class="subject-image position-relative">
-            <img src="/user-subjectbg.png" alt="Subject" class="w-100 h-100 object-fit-cover" />
-            <div class="overlay position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center">
-              <h1 class="text-white fw-bold text-center">{{ subject.name }}</h1>
+            <img
+              src="/user-subjectbg.png"
+              alt="Subject"
+              class="w-100 h-100 object-fit-cover"
+            />
+            <div
+              class="overlay position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+            >
+              <h1 class="text-white fw-bold text-center">
+                {{ subject.name }}
+              </h1>
             </div>
           </div>
           <!-- Description -->
           <div class="p-3 description-area">
-            <p class="mb-0 text-muted line-clamp">{{ subject.description }}</p>
+            <p class="mb-0 text-muted line-clamp">
+              {{ subject.description }}
+            </p>
           </div>
         </div>
       </div>
     </div>
 
     <!-- No Subjects -->
-    <div v-if="subjects.length === 0" class="text-center text-muted mt-4">
-      No subjects available.
+    <div v-if="filteredSubjects.length === 0" class="text-center text-muted mt-4">
+      No subjects found.
     </div>
   </div>
 </template>
 
-
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 
 const subjects = ref([])
+const filteredSubjects = ref([])
 const router = useRouter()
 
 function fetchSubjects() {
   axios.get('/api/user/subjects')
     .then(res => {
       subjects.value = res.data
+      filteredSubjects.value = res.data
     })
     .catch(err => {
       console.error('❌ Failed to fetch subjects', err)
@@ -53,8 +71,21 @@ function goToSubjectDetails(id) {
   router.push(`/user/subjects/${id}`)
 }
 
+function handleSearch(e) {
+  const term = e.detail.value.toLowerCase()
+  filteredSubjects.value = subjects.value.filter(subject =>
+    subject.name?.toLowerCase().includes(term) ||
+    subject.description?.toLowerCase().includes(term)
+  )
+}
+
 onMounted(() => {
   fetchSubjects()
+  window.addEventListener('user-search', handleSearch)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('user-search', handleSearch)
 })
 </script>
 
@@ -63,7 +94,7 @@ onMounted(() => {
   background-color: #ffffff;
   border: 1px solid #e0e0e0;
   transition: transform 0.2s ease-in-out;
-  height: 320px; /* 👈 fixed height */
+  height: 320px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -96,26 +127,14 @@ onMounted(() => {
   overflow: hidden;
 }
 
-/* .line-clamp {
+.line-clamp {
+  height: auto;
   display: -webkit-box;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3; 
   overflow: hidden;
   text-overflow: ellipsis;
-
-  
-  line-height: 1.4em;
-  max-height: calc(1.4em * 3); 
-} */
-
- .line-clamp {
-  height: auto;
-  display: -webkit-box;           /* Fallback for Safari, Chrome */
-  -webkit-line-clamp: 3;          /* Limit to 3 lines */
-  -webkit-box-orient: vertical;   /* Required for line-clamp */
-  overflow: hidden;               /* Hide overflowing content */
-  text-overflow: ellipsis;        /* Add '...' */
-  line-clamp: 3;                  /* Not fully supported yet, but future-proof */
-  box-orient: vertical;           /* Not yet standard, but included for consistency */
+  line-clamp: 3;
+  box-orient: vertical;
 }
 </style>

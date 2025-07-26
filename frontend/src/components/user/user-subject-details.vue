@@ -8,7 +8,7 @@
 
     <!-- Breadcrumb -->
     <div class="mb-4">
-      <small class="text-muted">Subject /<strong>{{ subject?.name || 'Subject Name' }}</strong></small>
+      <small class="text-muted">Subject / <strong>{{ subject?.name || 'Subject Name' }}</strong></small>
     </div>
 
     <!-- Subject Header -->
@@ -35,7 +35,8 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="chapter in chapters" :key="chapter.id">
+          <!-- ✅ Use filteredChapters instead of chapters -->
+          <tr v-for="chapter in filteredChapters" :key="chapter.id">
             <td>{{ chapter.name }}</td>
             <td>{{ chapter.description }}</td>
             <td>{{ chapter.quiz_count }}</td>
@@ -45,7 +46,9 @@
               </button>
             </td>
           </tr>
-          <tr v-if="chapters.length === 0">
+
+          <!-- ✅ Empty state for filteredChapters -->
+          <tr v-if="filteredChapters.length === 0">
             <td colspan="4" class="text-center text-muted">No chapters found.</td>
           </tr>
         </tbody>
@@ -55,7 +58,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref, computed } from 'vue'
+import { onMounted, ref, computed, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 
@@ -65,6 +68,7 @@ const route = useRoute()
 const subjectId = route.params.id
 const subject = ref({})
 const chapters = ref([])
+const filteredChapters = ref([]) // ✅ Filtered list
 
 const subjectInitials = computed(() => {
   const name = subject.value?.name || ''
@@ -94,18 +98,34 @@ function fetchSubjectDetails() {
 
 function fetchChapters() {
   axios.get(`/api/user/subjects/${subjectId}/chapters`).then(res => {
-    chapters.value = res.data.map(c => ({
+    const allChapters = res.data.map(c => ({
       ...c,
       quiz_count: c.quizzes?.length || 0
     }))
+    chapters.value = allChapters
+    filteredChapters.value = allChapters // ✅ Default display
   }).catch(err => {
     console.error('❌ Failed to fetch chapters', err.response?.data || err.message)
   })
 }
 
+// ✅ Search handler
+function handleSearch(e) {
+  const term = e.detail.value.toLowerCase()
+  filteredChapters.value = chapters.value.filter(chapter =>
+    chapter.name?.toLowerCase().includes(term) ||
+    chapter.description?.toLowerCase().includes(term)
+  )
+}
+
 onMounted(() => {
   fetchSubjectDetails()
   fetchChapters()
+  window.addEventListener('user-search', handleSearch) // ✅ Listen
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('user-search', handleSearch) // ✅ Clean up
 })
 </script>
 
@@ -127,5 +147,9 @@ onMounted(() => {
     background: #337665;
     color: #fac126;
     border-color: #337665
+}
+
+.table  th{
+  font-weight: bold
 }
 </style>

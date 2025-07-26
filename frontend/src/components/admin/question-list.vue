@@ -15,7 +15,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="q in questions" :key="q.id">
+        <tr v-for="q in filteredQuestions" :key="q.id">
           <td>{{ q.question_statement }}</td>
           <td>{{ q.option1 }}</td>
           <td>{{ q.option2 }}</td>
@@ -50,12 +50,17 @@ const props = defineProps({
 })
 
 const questions = ref([])
+const filteredQuestions = ref([])
+
 const showForm = ref(false)
 const current = ref(null)
 
 function fetch() {
   axios.get(`/api/admin/quizzes/${props.quizId}/questions`)
-    .then(res => { questions.value = res.data })
+    .then(res => {
+      questions.value = res.data
+      filteredQuestions.value = res.data
+    })
 }
 
 function openForm(q = null) {
@@ -68,5 +73,18 @@ function remove(id) {
     .then(fetch)
 }
 
-onMounted(fetch)
+onMounted(() => {
+  fetch()
+
+  window.addEventListener('admin-search', (e) => {
+    const term = e.detail.value.toLowerCase()
+    filteredQuestions.value = questions.value.filter(q =>
+      q.question_statement?.toLowerCase().includes(term) ||
+      q.option1?.toLowerCase().includes(term) ||
+      q.option2?.toLowerCase().includes(term) ||
+      q.option3?.toLowerCase().includes(term) ||
+      q.option4?.toLowerCase().includes(term)
+    )
+  })
+})
 </script>
