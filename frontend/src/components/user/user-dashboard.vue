@@ -9,6 +9,9 @@
         <p class="text-muted mb-0">Qualification: {{ user.qualification }}</p>
     <p class="text-muted mb-0">DOB: {{ user.dob }}</p>
         <!-- <p class="text-muted mb-0">Student ID: {{ user?.id }}</p> -->
+        <button class="btn btn-outline-success" @click="exportHistory">
+          Export Quiz History (CSV)
+        </button>
       </div>
     </div>
 
@@ -131,6 +134,17 @@ function fetchHistory() {
 function viewReport(scoreId) {
   console.log('Navigating to report with scoreId:', scoreId)
   router.push(`/user/report/${scoreId}`)
+}
+
+function exportHistory() {
+  axios.post('/api/user/history/export')
+    .then(() => {
+      alert('✅ Export started! You will receive your quiz history via email shortly.')
+    })
+    .catch((err) => {
+      console.error('❌ Export failed:', err)
+      alert('Something went wrong while requesting the export.')
+    })
 }
 
 onMounted(() => {

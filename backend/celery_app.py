@@ -8,12 +8,12 @@ celery = Celery(
     __name__,
     broker='redis://localhost:6379/0',
     backend='redis://localhost:6379/0',
-    include=['tasks.reminder']
+    include=['tasks.reminder', 'tasks.export']
 )
 celery.config_from_object(Config)  
 
 celery.conf.update(
-    include=["tasks.reminder"],
+    include=["tasks.reminder", "tasks.export"],
 )
 
 celery.conf.beat_schedule = {

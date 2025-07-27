@@ -3,6 +3,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, timezone
+from tasks.export import export_quiz_history_task
 
 from app import db
 from models import User, Subject, Chapter, Quiz, Question, Score, UserAnswer
@@ -393,3 +394,13 @@ def get_report_by_score(score_id):
         "completed_at": score.timestamp.isoformat() + "Z",
         "questions": detailed_results
     }), 200
+
+@user_bp.route("/history/export", methods=["POST"])
+@jwt_required()
+def export_quiz_history():
+    """
+    User triggers quiz history export (via email).
+    """
+    user_id = get_jwt_identity()
+    export_quiz_history_task.delay(user_id)
+    return jsonify({"message": "Your quiz history is being processed. You'll receive it via email shortly."}), 202
