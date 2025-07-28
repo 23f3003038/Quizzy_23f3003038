@@ -1,25 +1,42 @@
 # backend/app.py
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from config import Config
 from models import User
-from extensions import db, jwt, mail
+from extensions import db, jwt, mail, cache, limiter
 from celery import Celery
 from celery_app import init_celery
 from dotenv import load_dotenv
+from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
 
 load_dotenv()
 
+def get_rate_limit_key():
+    """Custom rate limit key by user ID if available, else IP."""
+    try:
+        verify_jwt_in_request(optional=True)  # allow missing token
+        user_id = get_jwt_identity()
+        if user_id:
+            return f"user:{user_id}"
+    except Exception:
+        pass
+    return request.remote_addr or "global"
 
 def create_app():
     app = Flask(__name__, instance_relative_config=False)
     app.config.from_object(Config)
 
+    # Redis caching config
+    app.config['CACHE_TYPE'] = 'RedisCache'
+    app.config['CACHE_REDIS_URL'] = 'redis://localhost:6379/0'
+
     # Initialize extensions
     db.init_app(app)
     jwt.init_app(app)
     mail.init_app(app)
+    cache.init_app(app)
+    limiter.init_app(app) 
 
     init_celery(app)
 

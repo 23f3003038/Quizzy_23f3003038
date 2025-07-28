@@ -5,10 +5,12 @@ from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identi
 from app import db
 from models import User, ActivityLog
 from datetime import datetime
+from extensions import limiter, cache
 
 auth_bp = Blueprint("auth", __name__)
 
 @auth_bp.route('/register', methods=['POST'])
+@limiter.limit("5 per minute")  # max 5 registrations per IP/min
 def register():
     data = request.get_json() or {}
     email     = data.get('email')
@@ -67,6 +69,7 @@ def register():
     ), 201
 
 @auth_bp.route("/login", methods=["POST"])
+@limiter.limit("10 per minute")  
 def login():
     data = request.get_json() or {}
     email = data.get('email')
@@ -88,6 +91,8 @@ def login():
 
 
 @auth_bp.route("/me", methods=["GET", "OPTIONS"])
+@jwt_required() 
+@cache.cached(timeout=60, key_prefix=lambda: f"user_me:{get_jwt_identity()}")
 def me():
     if request.method == "OPTIONS":
         return '', 200  # respond to preflight

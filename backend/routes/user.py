@@ -4,6 +4,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, timezone
 from tasks.export import export_quiz_history_task
+from extensions import cache, limiter
 
 from app import db
 from models import User, Subject, Chapter, Quiz, Question, Score, UserAnswer
@@ -12,6 +13,7 @@ user_bp = Blueprint("user", __name__, url_prefix="/api/user")
 
 @user_bp.route("/dashboard", methods=["GET"])
 @jwt_required()
+@limiter.limit("20 per minute")
 def get_user_dashboard():
     """
     Return user profile info and quiz stats for dashboard.
@@ -44,14 +46,19 @@ def get_user_dashboard():
 
 @user_bp.route("/history", methods=["GET"])
 @jwt_required()
+@limiter.limit("15 per minute")
 def get_quiz_history():
     user_id = get_jwt_identity()
-    scores = (
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 10, type=int)
+
+    pagination = (
         Score.query
         .filter_by(user_id=user_id)
         .order_by(Score.timestamp.desc())
-        .all()
+        .paginate(page=page, per_page=per_page, error_out=False)
     )
+    scores = pagination.items
 
     result = []
     for score in scores:
@@ -70,13 +77,21 @@ def get_quiz_history():
             "completed_at": score.timestamp.isoformat() + 'Z',
         })
 
-    return jsonify(result), 200
+    return jsonify({
+    "page": pagination.page,
+    "per_page": pagination.per_page,
+    "total_pages": pagination.pages,
+    "total_items": pagination.total,
+    "results": result
+}), 200
 
 @user_bp.route("/subjects", methods=["GET"])
 @jwt_required()
+@cache.cached(timeout=120)
+@limiter.limit("30 per minute")
 def list_subjects():
     """
-    List all subjects (for authenticated users).
+    List all subjects.
     """
     subjects = Subject.query.all()
     return jsonify([
@@ -90,6 +105,8 @@ def list_subjects():
 
 @user_bp.route("/subjects/<int:subject_id>", methods=["GET"])
 @jwt_required()
+@cache.cached(timeout=120)
+@limiter.limit("30 per minute")
 def get_subject_by_id(subject_id):
     subject = Subject.query.get_or_404(subject_id)
     return jsonify({
@@ -100,6 +117,8 @@ def get_subject_by_id(subject_id):
 
 @user_bp.route("/subjects/<int:subject_id>/chapters", methods=["GET"])
 @jwt_required()
+@cache.cached(timeout=120)
+@limiter.limit("30 per minute")
 def get_chapters_by_subject(subject_id):
     chapters = Chapter.query.filter_by(subject_id=subject_id).all()
 
@@ -117,6 +136,8 @@ def get_chapters_by_subject(subject_id):
 
 @user_bp.route("/subjects/<int:subject_id>/quizzes", methods=["GET"])
 @jwt_required()
+@cache.cached(timeout=120, query_string=True)
+@limiter.limit("30 per minute")
 def list_quizzes_by_subject(subject_id):
     """
     List all quizzes for a given subject.
@@ -141,6 +162,8 @@ def list_quizzes_by_subject(subject_id):
 
 @user_bp.route("/chapters/<int:chapter_id>", methods=["GET"])
 @jwt_required()
+@cache.cached(timeout=120)
+@limiter.limit("30 per minute")
 def get_chapter_details(chapter_id):
     chapter = Chapter.query.get_or_404(chapter_id)
 
@@ -161,6 +184,8 @@ def get_chapter_details(chapter_id):
 
 @user_bp.route("/quizzes", methods=["GET"])
 @jwt_required()
+@cache.cached(timeout=120)
+@limiter.limit("30 per minute")
 def list_all_quizzes():
     """
     List all quizzes across all subjects (for authenticated users).
@@ -178,7 +203,9 @@ def list_all_quizzes():
     ]), 200
 
 @user_bp.route("/quizzes/<int:quiz_id>", methods=["GET"])
-
+@jwt_required()
+@cache.cached(timeout=180)
+@limiter.limit("30 per minute")
 def get_quiz_by_id(quiz_id):
     """
     Get details of a specific quiz including optional question list.
@@ -199,6 +226,7 @@ def get_quiz_by_id(quiz_id):
 
 @user_bp.route("/quizzes/<int:quiz_id>/questions", methods=["GET"])
 @jwt_required()
+@limiter.limit("30 per minute")
 def get_quiz_questions(quiz_id):
     """
     Get all questions (and options) for a given quiz.
@@ -215,6 +243,7 @@ def get_quiz_questions(quiz_id):
 
 @user_bp.route("/quizzes/<int:quiz_id>/submit", methods=["POST"])
 @jwt_required()
+@limiter.limit("5 per minute")
 def submit_quiz(quiz_id):
     # Submit answers for a quiz and record the score.
 
@@ -285,6 +314,7 @@ def submit_quiz(quiz_id):
 
 @user_bp.route("/quizzes/<int:quiz_id>/result", methods=["GET"])
 @jwt_required()
+@limiter.limit("10 per minute")
 def get_quiz_result(quiz_id):
     """
     Get detailed result of the quiz attempt by the current user.
@@ -331,28 +361,42 @@ def get_quiz_result(quiz_id):
 
 @user_bp.route("/scores", methods=["GET"])
 @jwt_required()
+@limiter.limit("10 per minute")
 def get_my_scores():
     """
     Get the authenticated user's past quiz attempts and scores.
     """
     user_id = get_jwt_identity()
-    scores = (
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 10, type=int)
+
+    pagination = (
         Score.query
         .filter_by(user_id=user_id)
         .order_by(Score.timestamp.desc())
-        .all()
+        .paginate(page=page, per_page=per_page, error_out=False)
     )
-    return jsonify([
+    scores = pagination.items
+
+    return jsonify({
+    "page": pagination.page,
+    "per_page": pagination.per_page,
+    "total_pages": pagination.pages,
+    "total_items": pagination.total,
+    "results": [
         {
             "quiz_id": s.quiz_id,
             "timestamp": s.timestamp.isoformat(),
             "total_score": s.total_score
         }
         for s in scores
-    ]), 200
+    ]
+}), 200
+
 
 @user_bp.route("/scores/<int:score_id>/report", methods=["GET"])
 @jwt_required()
+@limiter.limit("10 per minute")
 def get_report_by_score(score_id):
     """
     Get detailed quiz report for a specific score (attempt).
@@ -397,6 +441,7 @@ def get_report_by_score(score_id):
 
 @user_bp.route("/history/export", methods=["POST"])
 @jwt_required()
+@limiter.limit("2 per hour")
 def export_quiz_history():
     """
     User triggers quiz history export (via email).

@@ -5,6 +5,7 @@ from flask_jwt_extended import verify_jwt_in_request, get_jwt, get_jwt_identity
 from functools import wraps
 from models import db, Subject, Chapter, Quiz, Question, User, Score, ActivityLog
 from datetime import datetime, timedelta
+from extensions import cache, limiter
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -22,6 +23,8 @@ def require_admin(fn):
 
 @admin_bp.route("/subjects", methods=["GET"])
 @require_admin
+@cache.cached(timeout=300, key_prefix="admin_subject_list")
+@limiter.limit("30/minute")
 def list_subjects():
     subjects = Subject.query.all()
     return jsonify([
@@ -36,6 +39,10 @@ def create_subject():
     name = data.get("name")
     if not name:
         return jsonify(msg="Name is required"), 400
+    
+    existing = Subject.query.filter_by(name=name).first()
+    if existing:
+        return jsonify({"error": "Subject already exists"}), 409
 
     subject = Subject(name=name, description=data.get("description"))
     db.session.add(subject)
@@ -49,6 +56,7 @@ def create_subject():
     db.session.add(log)
 
     db.session.commit()
+    cache.delete("admin_subject_list")
     return jsonify(id=subject.id, name=subject.name, description=subject.description), 201
 
 @admin_bp.route("/subjects/<int:id>", methods=["PUT", "DELETE"])
@@ -62,10 +70,12 @@ def modify_subject(id):
         subj.name = data["name"]
         subj.description = data.get("description")
         db.session.commit()
+        cache.delete("admin_subject_list")
         return jsonify(id=subj.id, name=subj.name, description=subj.description), 200
     else:
         db.session.delete(subj)
         db.session.commit()
+        cache.delete("admin_subject_list")
         return "", 204
 
 
@@ -113,6 +123,8 @@ def modify_chapter(id):
 
 @admin_bp.route("/quizzes", methods=["GET"])
 @require_admin
+@cache.cached(timeout=300, key_prefix="admin_quizzes_all")
+@limiter.limit("20/minute")
 def list_quizzes_global():
     """GET /api/admin/quizzes → returns every quiz"""
     quizzes = Quiz.query.all()
@@ -131,9 +143,9 @@ def list_quizzes_global():
 
 @admin_bp.route("/quizzes/<int:id>", methods=["GET"])
 @require_admin
+@cache.cached(timeout=300, key_prefix=lambda: f"admin_quiz_{request.view_args['id']}")
 def get_quiz_by_id(id):
     quiz = Quiz.query.get_or_404(id)
-
     chapter = Chapter.query.get(quiz.chapter_id)
     subject = Subject.query.get(chapter.subject_id) if chapter else None
 
@@ -150,7 +162,6 @@ def get_quiz_by_id(id):
         "subject_name": subject.name if subject else None
     }), 200
 
-import traceback
 @admin_bp.route("/chapters/<int:chapter_id>/quizzes", methods=["POST"])
 @require_admin
 def create_quiz(chapter_id):
@@ -193,7 +204,7 @@ def create_quiz(chapter_id):
 
         db.session.add(quiz)
         db.session.commit()
-
+        cache.delete("admin_quizzes_all")
         return jsonify(quiz.to_dict()), 201
 
     except Exception as e:
@@ -203,6 +214,7 @@ def create_quiz(chapter_id):
 
 @admin_bp.route("/chapters/<int:chap_id>/quizzes", methods=["GET"])
 @require_admin
+@cache.cached(timeout=300, key_prefix=lambda: f"admin_quizzes_chapter_{request.view_args['chap_id']}")
 def quizzes(chap_id):
     # Ensure chapter exists
     Chapter.query.get_or_404(chap_id)
@@ -254,15 +266,21 @@ def modify_quiz(id):
             quiz.remarks = remarks
 
             db.session.commit()
+            # Invalidate caches
+            cache.delete(f"admin_quiz_{id}")
+            cache.delete(f"admin_quizzes_chapter_{quiz.chapter_id}")
+            cache.delete("admin_quizzes_all")
             return jsonify(quiz.to_dict()), 200
 
         except Exception as e:
-            import traceback
-            traceback.print_exc()
             return jsonify({"error": f"Exception during quiz update: {str(e)}"}), 400
 
     db.session.delete(quiz)
     db.session.commit()
+    # Invalidate caches
+    cache.delete(f"admin_quiz_{id}")
+    cache.delete(f"admin_quizzes_chapter_{quiz.chapter_id}")
+    cache.delete("admin_quizzes_all")
     return "", 204
 
 
@@ -270,6 +288,8 @@ def modify_quiz(id):
 
 @admin_bp.route("/questions", methods=["GET"])
 @require_admin
+@cache.cached(timeout=300, key_prefix="admin_all_questions")
+@limiter.limit("15/minute")
 def list_questions_global():
     """GET /api/admin/questions → returns every question"""
     questions = Question.query.all()
@@ -289,6 +309,7 @@ def list_questions_global():
 
 @admin_bp.route("/quizzes/<int:quiz_id>/questions", methods=["GET", "POST"])
 @require_admin
+@cache.cached(timeout=300, key_prefix=lambda: f"admin_questions_quiz_{request.view_args['quiz_id']}")
 def questions(quiz_id):
     Quiz.query.get_or_404(quiz_id)
 
@@ -337,6 +358,8 @@ def questions(quiz_id):
 
     db.session.add(qn)
     db.session.commit()
+    cache.delete(f"admin_questions_quiz_{quiz_id}")
+    cache.delete("admin_all_questions")
 
     return jsonify(
         id=qn.id,
@@ -384,6 +407,8 @@ def modify_question(id):
         q.option4 = data.get("option4", "")
 
         db.session.commit()
+        cache.delete(f"admin_questions_quiz_{q.quiz_id}")
+        cache.delete("admin_all_questions")
 
         return jsonify(
             id=q.id,
@@ -398,12 +423,16 @@ def modify_question(id):
     # DELETE
     db.session.delete(q)
     db.session.commit()
+    cache.delete(f"admin_questions_quiz_{q.quiz_id}")
+    cache.delete("admin_all_questions")
     return "", 204
 
 # ------- List All Users -------
 
 @admin_bp.route("/users", methods=["GET"])
 @require_admin
+@cache.cached(timeout=60 * 5, key_prefix="admin_user_list")
+@limiter.limit("10 per minute")
 def list_users():
     users = User.query.all()
     return jsonify([
@@ -420,6 +449,8 @@ def list_users():
 
 @admin_bp.route("/recent-activity", methods=["GET"])
 @require_admin
+@cache.cached(timeout=60 * 2, key_prefix="admin_recent_activity")
+@limiter.limit("5 per minute")
 def recent_activity():
     logs = ActivityLog.query.order_by(ActivityLog.timestamp.desc()).limit(10).all()
     return jsonify([
@@ -435,6 +466,8 @@ def recent_activity():
 # ------- User Details and Stats -------
 @admin_bp.route("/users/<int:user_id>", methods=["GET"])
 @require_admin
+@cache.cached(timeout=60 * 5, key_prefix=lambda: f"user_detail_{request.view_args['user_id']}")
+@limiter.limit("5 per minute")
 def get_user_by_id(user_id):
     user = User.query.get_or_404(user_id)
     return jsonify({
@@ -448,6 +481,8 @@ def get_user_by_id(user_id):
 
 @admin_bp.route("/users/<int:user_id>/stats", methods=["GET"])
 @require_admin
+@cache.cached(timeout=60 * 5, key_prefix=lambda: f"user_stats_{request.view_args['user_id']}")
+@limiter.limit("5 per minute")
 def user_stats(user_id):
     user = User.query.get_or_404(user_id)
     scores = Score.query.filter_by(user_id=user_id).all()
@@ -462,6 +497,8 @@ def user_stats(user_id):
 
 @admin_bp.route("/users/<int:user_id>/activity", methods=["GET"])
 @require_admin
+@cache.cached(timeout=60 * 5, key_prefix=lambda: f"user_activity_{request.view_args['user_id']}")
+@limiter.limit("5 per minute")
 def user_activity(user_id):
     scores = Score.query.filter_by(user_id=user_id).order_by(Score.timestamp.desc()).limit(10).all()
     return jsonify([
@@ -494,8 +531,13 @@ def get_admin_me():
         "qualification": admin.qualification
     }), 200
 
+def make_subject_cache_key():
+    return f"subject_detail_{request.view_args['id']}"
+
 @admin_bp.route("/subjects/<int:id>", methods=["GET"])
 @require_admin
+@limiter.limit("5 per minute")
+@cache.cached(timeout=300, key_prefix=make_subject_cache_key)
 def get_subject_by_id(id):
     subject = Subject.query.get_or_404(id)
     return jsonify({
@@ -506,6 +548,8 @@ def get_subject_by_id(id):
 
 @admin_bp.route("/chapters/<int:id>", methods=["GET"])
 @require_admin
+@cache.cached(timeout=60 * 5, key_prefix=lambda: f"chapter_detail_{request.view_args['id']}")
+@limiter.limit("5 per minute")
 def get_chapter_by_id(id):
     chapter = Chapter.query.get_or_404(id)
     quizzes = Quiz.query.filter_by(chapter_id=id).all()
