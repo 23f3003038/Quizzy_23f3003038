@@ -5,6 +5,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, timezone
 from tasks.export import export_quiz_history_task
 from extensions import cache, limiter
+from sqlalchemy import func, desc
 
 from app import db
 from models import User, Subject, Chapter, Quiz, Question, Score, UserAnswer
@@ -449,3 +450,38 @@ def export_quiz_history():
     user_id = get_jwt_identity()
     export_quiz_history_task.delay(user_id)
     return jsonify({"message": "Your quiz history is being processed. You'll receive it via email shortly."}), 202
+
+@user_bp.route('/leaderboard', methods=['GET'])
+@jwt_required()           # note the ()
+def leaderboard():
+    """
+    GET /api/user/leaderboard
+    Returns a global leaderboard of all users, sorted by total points,
+    with avg accuracy percentage (assuming max 10 pts per quiz).
+    """
+    MAX_SCORE = 10
+
+    stats = (
+        db.session.query(
+            User.id.label('user_id'),
+            User.full_name.label('full_name'),
+            func.count(Score.id).label('quizzes_taken'),
+            func.sum(Score.total_score).label('total_points')
+        )
+        .join(Score, Score.user_id == User.id)
+        .group_by(User.id)
+        .order_by(desc('total_points'))
+        .all()
+    )
+
+    out = []
+    for user_id, full_name, quizzes_taken, total_points in stats:
+        avg_acc = (total_points / (quizzes_taken * MAX_SCORE) * 100) if quizzes_taken else 0
+        out.append({
+            'user_id':      user_id,
+            'full_name':    full_name,
+            'total_score':  int(total_points),
+            'avg_accuracy': round(avg_acc, 1)
+        })
+
+    return jsonify(out), 200

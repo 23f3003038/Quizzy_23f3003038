@@ -69,7 +69,8 @@ const routes = [
       { path: 'quiz/:quizid/attempt', name: 'UserQuizAttemptInstructions', component: userQuizInstructions, props: true},
       { path: 'quiz/:quizId/attempt/live', name: 'UserQuizAttempt', component: userQuizAttempt, props: true},
       { path: 'quiz/:quizId/result', name: 'UserQuizResult', component: userQuizResult, props: true},
-      { path: 'report/:scoreId', name: 'UserQuizReport', component: userQuizReport, props: true}
+      { path: 'report',         name: 'user-report',     component: userQuizReport },
+      { path: 'report/:scoreId', name: 'UserQuizReport', component: userQuizReport, props: true }
     ]
   },
 

@@ -8,6 +8,8 @@ import { createPinia } from 'pinia'
 import 'bootstrap/dist/css/bootstrap.min.css'
 import App from './App.vue'
 import router from './router'
+import { Chart, registerables } from 'chart.js'
+Chart.register(...registerables)
 
 // ——— Axios global configuration ———
 axios.defaults.baseURL = 'http://localhost:5000'
