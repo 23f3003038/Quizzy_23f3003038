@@ -97,6 +97,11 @@ def chapters(subj_id):
     name = data.get("name")
     if not name:
         return jsonify(msg="Name is required"), 400
+    existing = Chapter.query.filter_by(subject_id=subj_id, name=name).first()
+
+    if existing:
+        return jsonify(msg="Chapter with this name already exists in this subject."), 409
+    
     chap = Chapter(subject_id=subj_id, name=name, description=data.get("description"))
     db.session.add(chap)
     db.session.commit()
@@ -177,6 +182,10 @@ def create_quiz(chapter_id):
 
         if not name or not duration_str or not deadline_str:
             return jsonify({"error": "Name, duration, and deadline are required."}), 400
+        
+        existing_quiz = Quiz.query.filter_by(chapter_id=chapter_id, name=name).first()
+        if existing_quiz:
+            return jsonify({"error": "Quiz with this name already exists in this chapter."}), 409
 
         # Parse duration (HH:MM)
         parts = list(map(int, duration_str.split(":")))
@@ -201,10 +210,11 @@ def create_quiz(chapter_id):
             deadline=deadline,
             remarks=data.get("remarks")
         )
-
+        
         db.session.add(quiz)
         db.session.commit()
         cache.delete("admin_quizzes_all")
+        cache.delete(f"admin_quizzes_chapter_{chapter_id}")
         return jsonify(quiz.to_dict()), 201
 
     except Exception as e:
@@ -307,57 +317,64 @@ def list_questions_global():
         for q in questions
     ]), 200
 
-@admin_bp.route("/quizzes/<int:quiz_id>/questions", methods=["GET", "POST"])
+@admin_bp.route("/quizzes/<int:quiz_id>/questions", methods=["GET"])
 @require_admin
-@cache.cached(timeout=300, key_prefix=lambda: f"admin_questions_quiz_{request.view_args['quiz_id']}")
-def questions(quiz_id):
+@cache.cached(
+    timeout=300,
+    key_prefix=lambda: f"admin_questions_quiz_{request.view_args['quiz_id']}"
+)
+def list_quiz_questions(quiz_id):
     Quiz.query.get_or_404(quiz_id)
+    qs = Question.query.filter_by(quiz_id=quiz_id).all()
+    return jsonify([
+        {
+            "id": q.id,
+            "question_statement": q.question_statement,
+            "option1": q.option1,
+            "option2": q.option2,
+            "option3": q.option3,
+            "option4": q.option4,
+            "correct_option": q.correct_option
+        }
+        for q in qs
+    ]), 200
 
-    if request.method == "GET":
-        questions = Question.query.filter_by(quiz_id=quiz_id).all()
-        return jsonify([
-            {
-                "id": q.id,
-                "question_statement": q.question_statement,
-                "option1": q.option1,
-                "option2": q.option2,
-                "option3": q.option3,
-                "option4": q.option4,
-                "correct_option": q.correct_option
-            }
-            for q in questions
-        ]), 200
-
-    # POST
+@admin_bp.route("/quizzes/<int:quiz_id>/questions", methods=["POST"])
+@require_admin
+def create_question(quiz_id):
+    Quiz.query.get_or_404(quiz_id)
     data = request.get_json() or {}
-    required_fields = ["question_statement", "option1", "option2", "correct_option"]
-    if any(not data.get(f) for f in required_fields):
+
+    # Basic presence
+    required = ["question_statement", "option1", "option2", "correct_option"]
+    if any(not data.get(f) for f in required):
         return jsonify(msg="At least 2 options and question_statement are required"), 400
 
-    # Count how many non-empty options exist
-    options = [data.get(f, "").strip() for f in ["option1", "option2", "option3", "option4"]]
-    valid_options = [opt for opt in options if opt]
-    if len(valid_options) < 2:
+    # Trim and collect options
+    opts = [data.get(f, "").strip() for f in ("option1","option2","option3","option4")]
+    valid = [o for o in opts if o]
+    if len(valid) < 2:
         return jsonify(msg="At least 2 valid options are required"), 400
 
     # Validate correct_option
-    correct_index = data.get("correct_option")
-    if not isinstance(correct_index, int) or correct_index < 1 or correct_index > len(valid_options):
-        return jsonify(msg=f"Correct option must be between 1 and {len(valid_options)}"), 400
+    idx = data.get("correct_option")
+    if not isinstance(idx, int) or idx < 1 or idx > len(valid):
+        return jsonify(msg=f"Correct option must be between 1 and {len(valid)}"), 400
 
-    # Create the question
+    # Create
     qn = Question(
         quiz_id=quiz_id,
-        question_statement=data["question_statement"],
-        option1=data.get("option1", ""),
-        option2=data.get("option2", ""),
-        option3=data.get("option3", ""),
-        option4=data.get("option4", ""),
-        correct_option=data["correct_option"]
+        question_statement=data["question_statement"].strip(),
+        option1=opts[0],
+        option2=opts[1],
+        option3=opts[2] if len(opts)>2 else "",
+        option4=opts[3] if len(opts)>3 else "",
+        correct_option=idx
     )
-
     db.session.add(qn)
     db.session.commit()
+
+    # Bust the cache so your next GET sees it
     cache.delete(f"admin_questions_quiz_{quiz_id}")
     cache.delete("admin_all_questions")
 

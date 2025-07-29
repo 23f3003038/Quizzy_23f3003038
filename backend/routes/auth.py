@@ -74,13 +74,17 @@ def login():
     data = request.get_json() or {}
     email = data.get('email')
     password = data.get('password')
+    full_name = data.get('full_name')
 
-    if not email or not password:
-        return jsonify(msg='Missing email or password'), 400
+    if not email or not password or not full_name:
+        return jsonify(msg='Missing email, full name or password'), 400
 
     user = User.query.filter_by(email=email).first()
     if not user or not user.check_password(password):
         return jsonify({"msg": "Bad credentials"}), 401
+    
+    if user.full_name.lower() != full_name.strip().lower():
+        return jsonify({"msg": "Full name does not match"}), 401
 
     access_token = create_access_token(
         identity=str(user.id),

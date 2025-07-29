@@ -9,21 +9,37 @@
         </div>
 
         <!-- Form Inputs -->
-        <input
-          v-model="form.name"
-          class="form-control mb-2"
-          placeholder="Subject Name"
-        />
-        <textarea
-          v-model="form.description"
-          class="form-control mb-4"
-          placeholder="Add description..."
-        ></textarea>
+        <div>
+          <input
+            v-model="form.name"
+            @blur="validateField('name')"                         
+            @input="validateField('name')"
+            class="form-control mb-2"
+            placeholder="Subject Name"
+            :class="{ 'is-invalid': errors.name }"
+          />
+          <div v-if="errors.name" class="invalid-feedback">         
+              {{ errors.name }}
+          </div>
+        </div>
+        <div>
+          <textarea
+            v-model="form.description"
+            @blur="validateField('description')"                      
+            @input="validateField('description')"
+            class="form-control mb-4"
+            placeholder="Add description..."
+            :class="{ 'is-invalid': errors.description }"
+          ></textarea>
+          <div v-if="errors.description" class="invalid-feedback">   
+            {{ errors.description }}
+          </div>
+        </div>
 
         <!-- Buttons -->
         <div class="d-flex justify-content-end gap-2">
           <button class="btn btn-outline-secondary" @click="$emit('close')">Cancel</button>
-          <button class="btn btn-dark" @click="save">
+          <button class="btn btn-dark" @click="save" :disabled="!isFormValid || saving">
             {{ subject?.id ? 'Update' : 'Create' }} Subject
           </button>
         </div>
@@ -50,7 +66,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, watch } from 'vue'
+import { reactive, ref, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 
@@ -60,27 +76,61 @@ const emit = defineEmits(['saved', 'close'])
 
 const form = reactive({ name: '', description: '' })
 
-const showToast = ref(false)
-const toastMessage = ref('')
-const toastType = ref('success')
+// 1️⃣ Validation state
+const errors = reactive({                                               // ⬅️ Added
+  name: '',
+  description: ''
+})
+const saving = ref(false)                                               // ⬅️ Added
 
+// 2️⃣ Initialize on edit
 watch(
   () => props.subject,
   (s) => {
-    form.name = s?.name || ''
+    form.name        = s?.name || ''
     form.description = s?.description || ''
+    errors.name = errors.description = ''                               // ⬅️ Added: clear errors
   },
   { immediate: true }
 )
 
+// 3️⃣ Field validator
+function validateField(field) {                                         // ⬅️ Added
+  if (field === 'name') {
+    errors.name = form.name.trim() ? '' : 'Subject name is required'
+  }
+  if (field === 'description') {
+    errors.description = form.description.trim()
+      ? ''
+      : 'Description is required'
+  }
+}
+
+// 4️⃣ Overall form validity
+const isFormValid = computed(() =>                                      // ⬅️ Added
+  form.name.trim()        !== '' &&
+  form.description.trim() !== ''
+)
+
+// Toast helper
+const showToast    = ref(false)
+const toastMessage = ref('')
+const toastType    = ref('success')
 function showToastMessage(message, type = 'success') {
   toastMessage.value = message
-  toastType.value = type
-  showToast.value = true
+  toastType.value    = type
+  showToast.value    = true
   setTimeout(() => (showToast.value = false), 1500)
 }
 
+// 5️⃣ Save with validation
 function save() {
+  validateField('name')                                                // ⬅️ Added
+  validateField('description')                                         // ⬅️ Added
+
+  if (!isFormValid.value) return                                       // ⬅️ Added
+
+  saving.value = true                                                  // ⬅️ Added
   const payload = { name: form.name, description: form.description }
   const req = props.subject?.id
     ? axios.put(`/api/admin/subjects/${props.subject.id}`, payload)
@@ -103,6 +153,7 @@ function save() {
     .catch(() => {
       showToastMessage('❌ Failed to save subject.', 'error')
     })
+    .finally(() => (saving.value = false))                             // ⬅️ Added
 }
 </script>
 

@@ -59,7 +59,7 @@ class Chapter(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     subject_id = db.Column(db.Integer, db.ForeignKey("subjects.id"), nullable=False)
-    name = db.Column(db.String(100), nullable=False)
+    name = db.Column(db.String(100), unique= True, nullable=False)
     description = db.Column(db.Text)
 
     subject = db.relationship("Subject", back_populates="chapters")

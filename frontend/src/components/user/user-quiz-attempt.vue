@@ -157,8 +157,6 @@ function submitQuiz(auto = false) {
     }))
   }
 
-  console.log("📤 Submitting payload:", payload)
-
   axios.post(`/api/user/quizzes/${quizId}/submit`, payload)
     .then(res => {
       // console.log("✅ Quiz submitted. Feedback:", res.data)

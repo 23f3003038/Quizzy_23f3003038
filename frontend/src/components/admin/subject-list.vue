@@ -12,7 +12,7 @@
     <!-- Subject Cards Grid -->
     <div class="row mb-4 gy-5">
       <div v-if="filteredSubjects.length === 0" class="text-center text-muted py-5">
-        No results found.
+        Loading Subjects.
       </div>
 
       <div

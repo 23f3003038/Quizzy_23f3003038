@@ -1,5 +1,8 @@
 <template>
-  <div class="container py-4">
+  <div v-if="!isLoaded" class="container py-4 text-center">
+    Loading subject details…
+  </div>
+  <div v-else class="container py-4">
     <!-- Back link -->
     <div class="mb-3 d-flex align-items-center cursor-pointer" @click="goBack">
       <i class="bi bi-arrow-left me-2"></i> Back
@@ -58,7 +61,7 @@
 
       <!-- No Results -->
       <div v-else class="text-center text-muted py-4">
-        No results found.
+        No chapters found.
       </div>
     </div>
 
@@ -93,6 +96,7 @@ const route = useRoute()
 const router = useRouter()
 const subjectId = route.params.id
 
+
 const subject = ref(null)
 const chapters = ref([])
 const filteredChapters = ref([])
@@ -100,6 +104,8 @@ const filteredChapters = ref([])
 const showSubjectForm = ref(false)
 const showChapterForm = ref(false)
 const editingChapter = ref(null)
+
+const isLoaded = computed(() => subject.value !== null) 
 
 const initials = computed(() => {
   if (!subject.value?.name) return ""

@@ -9,27 +9,51 @@
         </div>
 
         <!-- Form Inputs -->
-        <input
-          v-model="form.name"
-          class="form-control mb-2"
-          placeholder="Quiz Name"
-        />
-        <textarea
-          v-model="form.description"
-          class="form-control mb-2"
-          placeholder="Add Description..."
-        ></textarea>
-        <input
-          v-model="form.duration"
-          type="text"
-          placeholder="Time Duration (HH:MM)"
-          class="form-control mb-2"
-        />
-        <input
-          v-model="form.deadline"
-          type="date"
-          class="form-control mb-4"
-        />
+        <div>
+          <input
+            v-model="form.name"
+            @blur="validateField('name')"                                        
+            @input="validateField('name')"                                       
+            class="form-control"
+            placeholder="Quiz Name"
+            :class="{ 'is-invalid': errors.name }"                               
+          />
+          <div v-if="errors.name" class="invalid-feedback">                      
+            {{ errors.name }}
+          </div>
+        </div>
+
+        <div>
+          <textarea
+            v-model="form.description"
+            class="form-control"
+            placeholder="Add Description..."
+          ></textarea>
+        </div>
+
+        <div>
+          <input
+            v-model="form.duration"
+            @blur="validateField('duration')"                                   
+            type="text"
+            placeholder="Time Duration (HH:MM)"
+            class="form-control"                         
+          />
+        </div>
+
+        <div>
+          <input
+            v-model="form.deadline"
+            @change="validateField('deadline')"                                  
+            type="date"
+            class="form-control"
+            :class="{ 'is-invalid': errors.deadline }"                           
+          />
+          <div v-if="errors.deadline" class="invalid-feedback">                 
+            {{ errors.deadline }}
+          </div>
+        </div>
+
         <textarea
           v-model="form.remarks"
           class="form-control mb-4"
@@ -39,7 +63,7 @@
         <!-- Buttons -->
         <div class="d-flex justify-content-end gap-2">
           <button class="btn btn-outline-secondary" @click="$emit('close')">Cancel</button>
-          <button class="btn btn-dark" @click="save">
+          <button class="btn btn-dark" @click="save" :disabled="!isFormValid || saving" >
             {{ quiz?.id ? 'Update' : 'Create' }} Quiz
           </button>
         </div>
@@ -66,7 +90,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, watch } from 'vue'
+import { reactive, ref, watch, computed } from 'vue'
 import axios from 'axios'
 
 const props = defineProps({ quiz: Object, chapterId: Number })
@@ -80,9 +104,22 @@ const form = reactive({
   remarks: ''
 })
 
-const showToast = ref(false)
-const toastMessage = ref('')
-const toastType = ref('success')
+const errors = reactive({                                                     
+  name:     '',
+  duration: '',
+  deadline: ''
+})
+const saving = ref(false)                                                     
+
+const isFormValid = computed(() => {                                          
+  return (
+    form.name.trim() !== '' &&
+    !errors.name &&
+    form.duration.trim() !== '' &&
+    !errors.duration &&
+    form.deadline !== ''
+  )
+})
 
 watch(
   () => props.quiz,
@@ -92,9 +129,29 @@ watch(
     form.duration = q?.duration || ''
     form.deadline = q?.deadline || ''
     form.remarks = q?.remarks || ''
+
+    // Clear errors on load
+    errors.name     = ''                                                     
+    errors.duration = ''                                                     
+    errors.deadline = '' 
   },
   { immediate: true }
 )
+function validateField(field) {
+  if (field === 'deadline') {
+    if (!form.deadline) {
+      errors.deadline = 'Deadline is required.'
+    } else if (new Date(form.deadline) < new Date(new Date().toDateString())) {
+      errors.deadline = 'Deadline cannot be in the past.'
+    } else {
+      errors.deadline = ''
+    }
+  }
+}
+
+const showToast    = ref(false)
+const toastMessage = ref('')
+const toastType    = ref('success')
 
 function showToastMessage(message, type = 'success') {
   toastMessage.value = message
@@ -103,32 +160,39 @@ function showToastMessage(message, type = 'success') {
   setTimeout(() => (showToast.value = false), 1500)
 }
 
-function save() {
+async function save() {                                                      
+  // Run validators
+  validateField('name')
+  validateField('duration')
+  validateField('deadline')
+
+  if (!isFormValid.value) return                                             
+
+  saving.value = true                                                        
   const payload = {
-    name: form.name,
+    name:        form.name,
     description: form.description,
-    duration: form.duration,
-    deadline: form.deadline,
-    remarks: form.remarks
+    duration:    form.duration,
+    deadline:    form.deadline,
+    remarks:     form.remarks
   }
 
-  console.log("📤 Sending quiz update payload:", payload)
+  try {
+    const req = props.quiz?.id
+      ? axios.put(`/api/admin/quizzes/${props.quiz.id}`, payload)
+      : axios.post(`/api/admin/chapters/${props.chapterId}/quizzes`, payload)
 
-  const req = props.quiz?.id
-    ? axios.put(`/api/admin/quizzes/${props.quiz.id}`, payload)
-    : axios.post(`/api/admin/chapters/${props.chapterId}/quizzes`, payload)
-
-  req
-    .then(() => {
-      showToastMessage('✅ Quiz saved successfully!', 'success')
-      setTimeout(() => {
-        emit('saved')
-        emit('close')
-      }, 1500)
-    })
-    .catch(() => {
-      showToastMessage('❌ Failed to save quiz.', 'error')
-    })
+    await req                                                                
+    showToastMessage('✅ Quiz saved successfully!', 'success')
+    setTimeout(() => {
+      emit('saved')
+      emit('close')
+    }, 1500)
+  } catch {
+    showToastMessage('❌ Failed to save quiz.', 'error')
+  } finally {
+    saving.value = false                                                     
+  }
 }
 </script>
 

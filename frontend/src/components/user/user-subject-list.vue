@@ -32,7 +32,7 @@
           </div>
           <!-- Description -->
           <div class="p-3 description-area">
-            <p class="mb-0 text-muted line-clamp">
+            <p class="mb-0 text-muted line-clamp text-center">
               {{ subject.description }}
             </p>
           </div>

@@ -4,27 +4,43 @@
       <div class="modal-card">
         <!-- Header -->
         <div class="modal-header d-flex justify-content-between align-items-center mb-3">
-          ADMIN / {{ props.subjectName || '...' }} / <strong>{{ chapter?.id ? 'EDIT CHAPTER' : 'ADD CHAPTER' }}</strong>
+          {{ props.subjectName || '...' }} / <strong>{{ chapter?.id ? 'EDIT CHAPTER' : 'ADD CHAPTER' }}</strong>
           <button class="btn-close" @click="$emit('close')" title="Close (ESC)"></button>
         </div>
 
         <!-- Form Inputs -->
-        <input
-          v-model="form.name"
-          class="form-control mb-2"
-          placeholder="Chapter Name"
-        />
-        <textarea
-          v-model="form.description"
-          class="form-control mb-4"
-          placeholder="Add description..."
-        ></textarea>
+         <div>
+          <input
+            v-model="form.name"
+            @blur="validateField('name')"      
+            @input="validateField('name')" 
+            class="form-control mb-2"
+            placeholder="Chapter Name"
+            :class="{ 'is-invalid': errors.name }"
+          />
+          <div v-if="errors.name" class="invalid-feedback">
+              {{ errors.name }}
+          </div>
+        </div>
+        <div>
+          <textarea
+            v-model="form.description"
+            @blur="validateField('description')"  
+            @input="validateField('description')" 
+            class="form-control"
+            placeholder="Add description..."
+            :class="{ 'is-invalid': errors.description }"
+          ></textarea>
+          <div v-if="errors.description" class="invalid-feedback">
+            {{ errors.description }}
+          </div>
+        </div>
 
         <!-- Buttons -->
         <div class="d-flex justify-content-end gap-2">
           <button class="btn btn-outline-secondary" @click="$emit('close')">Cancel</button>
-          <button class="btn btn-dark" @click="save">
-            {{ chapter?.id ? 'Update' : 'Create' }} Chapter
+          <button class="btn btn-dark" @click="save" :disabled="!isFormValid || saving" >
+            {{ props.chapter?.id ? 'Update' : 'Create' }} Chapter
           </button>
         </div>
       </div>
@@ -50,7 +66,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, watch } from 'vue'
+import { reactive, ref, watch, computed } from 'vue'
 import axios from 'axios'
 
 const props = defineProps({ chapter: Object, subjectId: Number, subjectName: String })
@@ -58,10 +74,43 @@ const emit = defineEmits(['saved', 'close'])
 
 const form = reactive({ name: '', description: '' })
 
-watch(() => props.chapter, (c) => {
-  form.name = c?.name || ''
-  form.description = c?.description || ''
-}, { immediate: true })
+// Validation state
+const errors = reactive({                                               // ⬅️ Added
+  name: '',
+  description: ''
+})
+const saving = ref(false)                                               // ⬅️ Added
+
+// Initialize form on edit
+watch(
+  () => props.chapter,
+  (c) => {
+    form.name        = c?.name || ''
+    form.description = c?.description || ''
+    // clear errors
+    errors.name = ''
+    errors.description = ''
+  },
+  { immediate: true }
+)
+
+// Field validator
+function validateField(field) {                                         // ⬅️ Added
+  if (field === 'name') {
+    errors.name = form.name.trim() ? '' : 'Chapter name is required'
+  }
+  if (field === 'description') {
+    errors.description = form.description.trim()
+      ? ''
+      : 'Description is required'
+  }
+}
+
+// Overall form validity
+const isFormValid = computed(() =>                                      // ⬅️ Added
+  form.name.trim() !== '' &&
+  form.description.trim() !== ''
+)
 
 const showToast = ref(false)
 const toastMessage = ref('')
@@ -75,6 +124,12 @@ function showToastMessage(message, type = 'success') {
 }
 
 function save() {
+  validateField('name')                                            
+  validateField('description')                                      
+
+  if (!isFormValid.value) return                                      
+
+  saving.value = true 
   const payload = { name: form.name, description: form.description }
 
   const req = props.chapter?.id
@@ -83,7 +138,7 @@ function save() {
 
   req
     .then(() => {
-      showToastMessage('✅ Chapter saved!', 'success')
+      showToastMessage('✅ Chapter created!', 'success')
       setTimeout(() => {
         emit('saved')
         emit('close')
@@ -94,6 +149,7 @@ function save() {
     .catch(() => {
       showToastMessage('❌ Failed to save chapter.', 'error')
     })
+    .finally(() => (saving.value = false))
 }
 </script>
 

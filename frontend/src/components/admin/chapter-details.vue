@@ -1,4 +1,7 @@
 <template>
+  <div v-if="!isLoaded" class="container py-4 text-center">
+    Loading chapter details…
+  </div>
   <div class="container py-4">
     <!-- Back -->
     <div class="mb-3 d-flex align-items-center cursor-pointer" @click="goBack">
@@ -44,7 +47,7 @@
         <tbody>
           <tr v-if="filteredQuizzes.length === 0">
             <td colspan="5" class="text-center text-muted py-4">
-               No results found.
+               No quizzes found.
             </td>
           </tr>
           <tr v-for="(quiz, index) in filteredQuizzes" :key="quiz.id">
@@ -87,12 +90,21 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 
+const props = defineProps({
+  id: {
+    type: [String, Number],
+    required: false
+  }
+})
+
 // Forms
 import QuizForm from './quiz-form.vue'
 import ChapterForm from './chapter-form.vue'
 
 const route = useRoute()
 const router = useRouter()
+
+const chapterId = props.id ?? route.params.id
 
 const chapter = ref(null)
 const quizzes = ref([])
@@ -104,7 +116,7 @@ const showQuizForm = ref(false)
 const editingChapter = ref(null)
 const editingQuiz = ref(null)
 
-const chapterId = route.params.id
+const isLoaded = computed(() => !!chapter.value && quizzes.value !== null)
 
 const chapterInitials = computed(() => {
   if (!chapter.value?.name) return ""

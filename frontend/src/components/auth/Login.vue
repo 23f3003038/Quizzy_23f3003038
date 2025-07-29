@@ -18,18 +18,27 @@
           <span class="text-muted">Please login to your account</span>
           <div class="mb-3">
             <label class="form-label">Full Name</label>
-            <input v-model="full_name" type="text" placeholder="Enter full name" class="form-control" />
+            <input v-model="full_name" @blur="validateFullName" @input="validateFullName" type="text" placeholder="Enter full name" class="form-control" :class="{ 'is-invalid': errors.full_name }" />
+            <div v-if="errors.full_name" class="invalid-feedback">
+              {{ errors.full_name }}
+            </div>
           </div>
           <div class="mb-3">
             <label class="form-label">Email</label>
-            <input v-model="email" type="email" placeholder="abc@gmail.com" class="form-control" />
+            <input v-model="email" @blur="validateEmail" @input="validateEmail" type="email" placeholder="abc@gmail.com" class="form-control" :class="{ 'is-invalid': errors.email }" />
+            <div v-if="errors.email" class="invalid-feedback">
+              {{ errors.email }}
+            </div>
           </div>
           <div class="mb-3">
             <label class="form-label">Password</label>
-            <input v-model="password" type="password" class="form-control" />
+            <input v-model="password" @blur="validatePassword" @input="validatePassword" type="password" class="form-control" :class="{ 'is-invalid': errors.password }" />
+            <div v-if="errors.password" class="invalid-feedback">
+              {{ errors.password }}
+            </div>
           </div>
-          <button class="btn btn-primary w-100" @click="login">Login</button>
-          <div v-if="error" class="alert alert-danger mt-3 text-center">{{ error }}</div>
+          <button class="btn btn-primary w-100" @click="login" :disabled="!isFormValid || submitting">Login</button>
+          <div v-if="serverError" class="alert alert-danger mt-3 text-center">{{ serverError }}</div>
           <p class="mt-3 text-center">Don't have an account?
             <router-link to="/register" class="text-decoration-none">
               Create one
@@ -42,29 +51,75 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import axios from 'axios'
 import { useRouter } from 'vue-router'
 
 const full_name = ref('')
 const email = ref('')
 const password = ref('')
-const error = ref('')
+const serverError = ref('')
+const errors = reactive({
+  full_name: '',
+  email: '',
+  password: ''
+})
+const submitting = ref(false) 
 const router = useRouter()
 
+// Computed flag
+const isFormValid = computed(() =>
+  full_name.value.trim() !== '' &&
+  email.value.trim()     !== '' &&
+  password.value.trim()  !== ''
+)
+
+// Field validators
+function validateFullName() {
+  errors.full_name = full_name.value.trim()
+    ? ''
+    : 'Full name is required'
+}
+function validateEmail() {
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!email.value.trim()) {
+    errors.email = 'Email is required'
+  } else if (!re.test(email.value)) {
+    errors.email = 'Invalid email format'
+  } else {
+    errors.email = ''
+  }
+}
+function validatePassword() {
+  if (!password.value) {
+    errors.password = 'Password is required'
+  } else if (password.value.length < 6) {
+    errors.password = 'At least 6 characters'
+  } else {
+    errors.password = ''
+  }
+}
+
 async function login() {
-  error.value = ''
+  serverError.value = ''
+  validateFullName(); validateEmail(); validatePassword()
+
+  if (!isFormValid.value) return
+
+  submitting.value = true
   try {
     const res = await axios.post('/api/auth/login', {
       full_name: full_name.value,
-      email: email.value,
-      password: password.value
+      email:      email.value,
+      password:   password.value
     })
     localStorage.setItem('access_token', res.data.access_token)
     axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.access_token}`
     router.push({ name: 'admin-dashboard' })
   } catch (e) {
-    error.value = e.response?.data?.msg || 'Login failed'
+    serverError.value = e.response?.data?.msg || 'Login failed'
+  } finally {
+    submitting.value = false
   }
 }
 </script>

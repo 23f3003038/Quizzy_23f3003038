@@ -58,6 +58,30 @@
         </tbody>
       </table>
     </div>
+    <!-- Pagination Controls -->
+    <nav aria-label="History pagination" class="d-flex justify-content-center mt-3"> 
+      <ul class="pagination mb-0">
+        <li class="page-item" :class="{ disabled: currentPage === 1 }">
+          <button class="page-link" 
+                  @click="changePage(currentPage - 1)" 
+                  :disabled="currentPage === 1">
+            Previous
+          </button>
+        </li>
+        <li class="page-item disabled">
+          <span class="page-link">
+            Page {{ currentPage }} of {{ totalPages }}
+          </span>
+        </li>
+        <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+          <button class="page-link" 
+                  @click="changePage(currentPage + 1)" 
+                  :disabled="currentPage === totalPages">
+            Next
+          </button>
+        </li>
+      </ul>
+    </nav>
   </div>
 </template>
 
@@ -96,6 +120,11 @@ const stats = ref([
 const upcomingQuiz = ref(null)
 const history = ref([])
 
+// Pagination state
+const currentPage = ref(1)         
+const perPage     = ref(10)         
+const totalPages  = ref(1)
+
 function fetchDashboardData() {
   axios.get('/api/user/dashboard').then(res => {
     const data = res.data
@@ -118,17 +147,42 @@ function fetchDashboardData() {
 }
 
 
-function fetchHistory() {
-  axios.get('/api/user/history').then(res => {
-    history.value = res.data.map(item => ({
-      ...item,
-      completed_at_ist: formatToIST(item.completed_at)
-    }))
-      console.log('Formatted history:', history.value)
-
-  }).catch(err => {
-    console.error('❌ Failed to load history', err)
+function fetchHistory(page = 1) {
+  axios.get('/api/user/history', {
+    params: { 
+      page: page,                  
+      per_page: perPage.value      
+    }
   })
+    .then(res => {
+      const data = res.data
+      let items = []
+      if (Array.isArray(data)) {
+        items = data
+      } else if (Array.isArray(data.results)) {
+        items = data.results                 
+      } else if (Array.isArray(data.history)) {
+        items = data.history
+      } else {
+        console.warn('Unexpected history payload:', data)
+      }
+
+      // Now safe to .map
+      history.value = items.map(item => ({
+        ...item,
+        completed_at_ist: formatToIST(item.completed_at)
+      }))
+      currentPage.value = data.page        
+      totalPages.value  = data.total_pages
+    })
+    .catch(err => {
+      console.error('❌ Failed to load history', err)
+    })
+}
+
+function changePage(newPage) {
+  if (newPage < 1 || newPage > totalPages.value) return
+  fetchHistory(newPage)
 }
 
 function viewReport(scoreId) {
