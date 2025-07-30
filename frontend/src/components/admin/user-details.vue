@@ -9,38 +9,42 @@
     <!-- Heading -->
     <h2 class="mb-4">Student Details</h2>
 
-    <div v-if="user" class="card shadow-sm mb-4 p-3 d-flex flex-row align-items-center">
-      <!-- Initials Square -->
+    <!-- Profile Header -->
+    <div
+      v-if="user"
+      class="card shadow-sm mb-4 p-3 d-flex flex-row align-items-center"
+    >
       <div class="initials-box me-3">
         {{ getInitials(user.full_name) }}
       </div>
-
-      <!-- User Info -->
       <div>
         <h4 class="mb-1">{{ user.full_name }}</h4>
+        <p class="mb-1 text-muted">{{ user.email }}</p>
         <p class="mb-1 text-muted">{{ user.qualification || '—' }}</p>
-        <p class="mb-0 text-muted">{{ user.dob ? new Date(user.dob).toLocaleDateString() : '—' }}</p>
+        <p class="mb-0 text-muted">
+          {{ user.dob ? formatDateIST(user.dob) : '—' }}
+        </p>
       </div>
     </div>
 
     <!-- Summary Stats -->
     <div class="row g-3 mb-5">
-      <div class="col-md-4">
-        <div class="card text-center shadow-sm p-3">
+      <div class="col-md-4 d-flex">
+        <div class="card text-center shadow-sm p-3 flex-fill">
           <h5>Total Quizzes</h5>
           <p class="display-6 mb-0">{{ stats.totalQuizzes }}</p>
         </div>
       </div>
-      <div class="col-md-4">
-        <div class="card text-center shadow-sm p-3">
+      <div class="col-md-4 d-flex">
+        <div class="card text-center shadow-sm p-3 flex-fill">
           <h5>Average Score</h5>
           <p class="display-6 mb-0">{{ stats.avgScore }}%</p>
         </div>
       </div>
-      <div class="col-md-4">
-        <div class="card text-center shadow-sm p-3">
+      <div class="col-md-4 d-flex">
+        <div class="card text-center shadow-sm p-3 flex-fill">
           <h5>Last Active</h5>
-          <p class="mb-0">{{ formatDate(stats.lastActive) || '—' }}</p>
+          <p class="mb-0">{{ formatDateIST(stats.lastActive) || '—' }}</p>
         </div>
       </div>
     </div>
@@ -55,25 +59,23 @@
           <th>Score</th>
           <th>Accuracy</th>
           <th>Completion Date</th>
-          <th>Actions</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="(entry, idx) in activity" :key="idx">
           <td>{{ entry.subject }}</td>
           <td>{{ entry.quiz }}</td>
-          <td>{{ entry.score }}%</td>
+          <!-- raw score, no percent sign -->
+          <td>{{ entry.score }}</td>
+          <!-- accuracy is already a percent value -->
           <td>{{ entry.accuracy }}%</td>
-          <td>{{ formatDate(entry.completed_at) }}</td>
-          <td>
-            <button class="btn btn-sm btn-outline-primary custom-hover">View Details</button>
-          </td>
+          <td>{{ formatDateIST(entry.completed_at) }}</td>
         </tr>
       </tbody>
     </table>
 
-    <div v-if="!user">
-      <p>Loading user data...</p>
+    <div v-if="!user" class="text-center text-muted">
+      Loading user data...
     </div>
   </div>
 </template>
@@ -83,39 +85,41 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 
-const route = useRoute()
+const route  = useRoute()
 const userId = route.params.id
-const user = ref(null)
-const stats = ref({
-  totalQuizzes: 0,
-  avgScore: 0,
-  lastActive: null
-})
+
+const user     = ref(null)
+const stats    = ref({ totalQuizzes: 0, avgScore: 0, lastActive: null })
 const activity = ref([])
 
 function getInitials(name) {
   return name
     .split(' ')
-    .map(word => word[0]?.toUpperCase())
+    .map(w => w[0]?.toUpperCase())
     .join('')
     .slice(0, 2)
 }
 
-function formatDate(dateStr) {
-  if (!dateStr) return null
-  return new Date(dateStr).toLocaleString()
+function formatDateIST(isoString) {
+  if (!isoString) return null
+  return new Date(isoString).toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    year:   'numeric',
+    month:  'short',
+    day:    'numeric',
+  })
 }
 
 onMounted(async () => {
   try {
-    const [userRes, statsRes, activityRes] = await Promise.all([
-      axios.get(`/api/admin/users/${userId}`, { withCredentials: true }),
-      axios.get(`/api/admin/users/${userId}/stats`, { withCredentials: true }),
-      axios.get(`/api/admin/users/${userId}/activity`, { withCredentials: true })
+    const [uRes, sRes, aRes] = await Promise.all([
+      axios.get(`/api/admin/users/${userId}`),
+      axios.get(`/api/admin/users/${userId}/stats`),
+      axios.get(`/api/admin/users/${userId}/activity`)
     ])
-    user.value = userRes.data
-    stats.value = statsRes.data
-    activity.value = activityRes.data
+    user.value     = uRes.data
+    stats.value    = sRes.data
+    activity.value = aRes.data
   } catch (err) {
     console.error('Failed to load user details:', err)
   }
@@ -136,9 +140,13 @@ onMounted(async () => {
   border-radius: 0.25rem;
 }
 
+.flex-fill {
+  flex: 1 1 auto;
+}
+
 .custom-hover:hover {
-  background-color:  #0a3158 ;
-  color: white ;
-  border-color: black ;
+  background-color: #0a3158;
+  color: white;
+  border-color: black;
 }
 </style>

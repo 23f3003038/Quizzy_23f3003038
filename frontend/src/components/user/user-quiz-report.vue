@@ -8,6 +8,23 @@
 
     <!-- 1) Subject‑wise & Recent Performance -->
     <div class="row g-4 mb-4">
+      <div class="card p-3 shadow-sm mb-4">
+      <h4 class="card-title">Leaderboard</h4>
+      <table class="table">
+        <thead><tr><th>#</th><th>Name</th><th>Total Score</th><th>Avg. Accuracy</th></tr></thead>
+        <tbody>
+          <tr v-if="leaderboard.length === 0">
+            <td colspan="4" class="text-center text-muted py-3">No leaderboard data</td>
+          </tr>
+          <tr v-for="(u,i) in leaderboard" :key="u.user_id">
+            <td>{{ i+1 }}</td>
+            <td>{{ u.full_name }}</td>
+            <td>{{ u.total_score }}</td>
+            <td>{{ u.avg_accuracy }}%</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
       <!-- Subject‑wise -->
       <div class="col-md-6">
         <div class="card p-3 shadow-sm">
@@ -62,24 +79,6 @@
         </div>
       </div>
     </div>
-
-    <div class="card p-3 shadow-sm mb-4">
-      <h4 class="card-title">Leaderboard</h4>
-      <table class="table">
-        <thead><tr><th>#</th><th>Name</th><th>Total Score</th><th>Avg. Accuracy</th></tr></thead>
-        <tbody>
-          <tr v-if="leaderboard.length === 0">
-            <td colspan="4" class="text-center text-muted py-3">No leaderboard data</td>
-          </tr>
-          <tr v-for="(u,i) in leaderboard" :key="u.user_id">
-            <td>{{ i+1 }}</td>
-            <td>{{ u.full_name }}</td>
-            <td>{{ u.total_score }}</td>
-            <td>{{ u.avg_accuracy }}%</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
   </div>
 </template>
 
@@ -118,13 +117,28 @@ async function fetchHistory() {
   }
 }
 
+const MAX_SCORE = 5  // or however many questions per quiz
+
 async function fetchLeaderboard() {
   try {
     const res = await axios.get('/api/user/leaderboard')
-    leaderboard.value = res.data.map(u => ({
-      ...u,
-      avg_accuracy: +u.avg_accuracy.toFixed(1)
-    }))
+    leaderboard.value = res.data
+      .map(u => {
+        // prefer the real total_questions if it was returned:
+        const totalQuestions = u.total_questions ?? (u.quizzes_taken * MAX_SCORE)
+
+        // guard divide-by-zero:
+        const avg = totalQuestions > 0
+          ? (u.total_score / totalQuestions) * 100
+          : 0
+
+        return {
+          ...u,
+          avg_accuracy: +avg.toFixed(1)
+        }
+      })
+      // ← sort by total score DESC
+      .sort((a, b) => b.total_score - a.total_score)
   } catch (e) {
     console.error('Failed to fetch leaderboard', e)
   }

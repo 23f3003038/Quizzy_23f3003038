@@ -1,5 +1,31 @@
 <template>
   <div class="quiz-attempt container py-4">
+    <!-- Toast Notifications -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 2000;">
+      <div
+        class="toast align-items-center text-white border-0 mb-2"
+        :class="{
+          'bg-success': toastType === 'success',
+          'bg-danger': toastType === 'error',
+          show: showToast
+        }"
+        role="alert"
+        aria-live="assertive"
+        aria-atomic="true"
+      >
+        <div class="d-flex">
+          <div class="toast-body">
+            {{ toastMessage }}
+          </div>
+          <button
+            type="button"
+            class="btn-close btn-close-white me-2 m-auto"
+            @click="showToast = false"
+          ></button>
+        </div>
+      </div>
+    </div>
+
     <!-- Timer -->
     <div class="timer-bar alert alert-warning text-center fw-bold" role="alert">
       ⏳ Time Left: {{ formattedTime }}
@@ -72,6 +98,19 @@ const timerInterval = ref(null)
 
 const answers = ref({})
 
+// Toast state
+const showToast = ref(false)
+const toastMessage = ref('')
+const toastType = ref('success')
+
+function showToastMessage(msg, type = 'success') {
+  toastMessage.value = msg
+  toastType.value = type
+  showToast.value = true
+  setTimeout(() => { showToast.value = false }, 3000)
+}
+
+
 // Format time in mm:ss
 const formattedTime = computed(() => {
   const minutes = Math.floor(timeLeft.value / 60)
@@ -107,23 +146,23 @@ onBeforeUnmount(() => {
 })
 
 function fetchQuizData() {
-  axios.get(`/api/user/quizzes/${quizId}`).then(res => {
-    // console.log("Raw quiz question:", res.data.questions)
+  axios.get(`/api/user/quizzes/${quizId}`)
+    .then(res => {
+      questions.value = res.data.questions.map(q => {
+        const options = [q.option1, q.option2, q.option3, q.option4].filter(Boolean)
+        return { ...q, options }
+      })
 
-    questions.value = res.data.questions.map(q => {
-      const options = [q.option1, q.option2, q.option3, q.option4].filter(Boolean)
-      return { ...q, options }
+      durationInSeconds.value = parseDuration(res.data.duration)
+      timeLeft.value = durationInSeconds.value
+
+      startTimer()
     })
-
-    durationInSeconds.value = parseDuration(res.data.duration)
-    timeLeft.value = durationInSeconds.value
-
-    startTimer()
-  }).catch(err => {
-    console.error("❌ Error fetching quiz data:", err?.response?.data || err.message || err)
-    alert("Failed to load quiz.")
-    router.push('/user/dashboard')
-  })
+    .catch(err => {
+      console.error('❌ Error fetching quiz data:', err)
+      showToastMessage('Failed to load quiz.', 'error')
+      setTimeout(() => router.push('/user/dashboard'), 1500)
+    })
 }
 
 function parseDuration(durationStr) {
@@ -136,45 +175,45 @@ function startTimer() {
     timeLeft.value--
 
     if (timeLeft.value === 300) {
-      alert('⚠️ Only 5 minutes remaining!')
+      showToastMessage('⚠️ Only 5 minutes remaining!', 'error')
     }
 
     if (timeLeft.value <= 0) {
       clearInterval(timerInterval.value)
       submitQuiz(true)
     }
-  }, 1000)
+  }, 2500)
 }
 
-function submitQuiz(auto = false) {
+async function submitQuiz(auto = false) {
   clearInterval(timerInterval.value)
   window.removeEventListener('beforeunload', confirmExit)
 
   const payload = {
     answers: Object.entries(answers.value).map(([question_id, selected]) => ({
       question_id: parseInt(question_id),
-      selected: selected
+      selected
     }))
   }
 
-  axios.post(`/api/user/quizzes/${quizId}/submit`, payload)
-    .then(res => {
-      // console.log("✅ Quiz submitted. Feedback:", res.data)
-
-      if (auto) {
-        alert("⏰ Time's up! Your quiz was auto-submitted.")
-      }
-
-      // If backend returns feedback or score, you can store it or pass it to results page.
-      // For now we redirect:
-      router.push(`/user/quiz/${quizId}/result`)
+  try {
+    const { data } = await axios.post(
+      `/api/user/quizzes/${quizId}/submit`,
+      payload
+    )
+    if (auto) {
+      showToastMessage("⏰ Time's up! Your quiz was auto-submitted.", 'error')
+    }
+    // redirect to the result page for this exact attempt
+    router.push({
+      name: 'UserQuizResult',
+      params: { attemptId: data.id }
     })
-    .catch(err => {
-      console.error("❌ Submission failed:", err?.response?.data || err.message || err)
-      alert("Failed to submit quiz.")
-    })
+  } catch (err) {
+    console.error('❌ Submission failed:', err)
+    showToastMessage('Failed to submit quiz.', 'error')
+  }
 }
-
 </script>
 
 <style scoped>
@@ -197,7 +236,7 @@ function submitQuiz(auto = false) {
   gap: 0.5rem;
   padding: 8px 0;
   border-bottom: 1px dashed #ccc;
-  margin-left:1.2rem
+  margin-left: 1.2rem;
 }
 
 .form-check-label {
@@ -206,5 +245,14 @@ function submitQuiz(auto = false) {
   line-height: 1.4;
   white-space: normal;
   width: 100%;
+}
+
+/* Toast overrides */
+.toast {
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+.toast.show {
+  opacity: 1;
 }
 </style>

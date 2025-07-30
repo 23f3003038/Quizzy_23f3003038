@@ -16,7 +16,7 @@
       <tbody>
         <tr v-if="students.length === 0">
           <td colspan="5" class="text-center text-muted py-3">
-            No results found.
+            No user found.
           </td>
         </tr>
         <tr v-for="u in students" :key="u.id">

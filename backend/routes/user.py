@@ -20,30 +20,41 @@ def get_user_dashboard():
     Return user profile info and quiz stats for dashboard.
     """
     user_id = get_jwt_identity()
-    user = User.query.get_or_404(user_id)
+    user    = User.query.get_or_404(user_id)
 
-    # Fetch quiz scores
+    # fetch every attempt
     scores = Score.query.filter_by(user_id=user_id).all()
-    total_quizzes = len(scores)
-    total_score = sum([s.total_score for s in scores])
-    max_score_per_quiz = 10  # adjust this if your quiz max score is different
+    total_quizzes   = len(scores)
+    total_correct   = sum(s.total_score for s in scores)
+    # count actual questions on each quiz
+    total_questions = sum(len(s.quiz.questions) for s in scores)
 
-    average_score = round((total_score / (total_quizzes * max_score_per_quiz)) * 100, 2) if total_quizzes else 0
-    accuracy = average_score  # if accuracy is based on total score
+    # overall percentage across all attempts
+    average_accuracy = (
+        round(total_correct / total_questions * 100, 2)
+        if total_questions else 0
+    )
 
-    last_active = max([s.timestamp for s in scores], default=None)
+    last_active = max((s.timestamp for s in scores), default=None)
 
     return jsonify({
-        "full_name": user.full_name,
-        "email": user.email,
-        "student_id": user.id,
+        "full_name":     user.full_name,
+        "email":         user.email,
+        "student_id":    user.id,
         "qualification": user.qualification,
-        "dob": user.dob.isoformat() if user.dob else None,
-        "total_quizzes": total_quizzes,
-        "average_score": average_score,
-        "accuracy": accuracy,
-        "last_active": last_active.isoformat() + 'Z' if last_active else None
+        "dob":           user.dob.isoformat() if user.dob else None,
+
+        "total_quizzes":  total_quizzes,
+        # use the new calculation here:
+        "average_score":  average_accuracy,
+        "accuracy":       average_accuracy,
+
+        "last_active": (
+            last_active.isoformat() + "Z"
+            if last_active else None
+        )
     }), 200
+
 
 @user_bp.route("/history", methods=["GET"])
 @jwt_required()
@@ -306,6 +317,7 @@ def submit_quiz(quiz_id):
     db.session.commit()
 
     return jsonify({
+        "id": score.id,
         "quiz_id": quiz_id,
         "user_id": user_id,
         "total_score": total_correct,
@@ -452,36 +464,26 @@ def export_quiz_history():
     return jsonify({"message": "Your quiz history is being processed. You'll receive it via email shortly."}), 202
 
 @user_bp.route('/leaderboard', methods=['GET'])
-@jwt_required()           # note the ()
+@jwt_required()
 def leaderboard():
-    """
-    GET /api/user/leaderboard
-    Returns a global leaderboard of all users, sorted by total points,
-    with avg accuracy percentage (assuming max 10 pts per quiz).
-    """
-    MAX_SCORE = 10
-
     stats = (
-        db.session.query(
-            User.id.label('user_id'),
-            User.full_name.label('full_name'),
-            func.count(Score.id).label('quizzes_taken'),
-            func.sum(Score.total_score).label('total_points')
-        )
-        .join(Score, Score.user_id == User.id)
-        .group_by(User.id)
-        .order_by(desc('total_points'))
-        .all()
+      db.session.query(
+        User.id.label('user_id'),
+        User.full_name.label('full_name'),
+        func.count(Score.id).label('quizzes_taken'),
+        func.sum(Score.total_score).label('total_score')
+      )
+      .join(Score, Score.user_id == User.id)
+      .group_by(User.id)
+      .all()
     )
 
     out = []
-    for user_id, full_name, quizzes_taken, total_points in stats:
-        avg_acc = (total_points / (quizzes_taken * MAX_SCORE) * 100) if quizzes_taken else 0
+    for user_id, full_name, quizzes_taken, total_score in stats:
         out.append({
-            'user_id':      user_id,
-            'full_name':    full_name,
-            'total_score':  int(total_points),
-            'avg_accuracy': round(avg_acc, 1)
+          'user_id':      user_id,
+          'full_name':    full_name,
+          'total_score':  int(total_score),
+          'quizzes_taken': int(quizzes_taken)
         })
-
     return jsonify(out), 200

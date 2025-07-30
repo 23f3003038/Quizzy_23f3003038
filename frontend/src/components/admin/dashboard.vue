@@ -65,7 +65,7 @@ import axios from 'axios'
 const cards = ref([
   { title: 'Users',            icon: 'bi bi-people',          value: 0, link: '/admin/users' },
   { title: 'Subjects',         icon: 'bi bi-journal-bookmark', value: 0, link: '/admin/subjects' },
-  { title: 'Upcoming Quizzes', icon: 'bi bi-clock-history',   value: 0, link: '/admin/quizzes' },
+  { title: 'Upcoming Quizzes', icon: 'bi bi-clock-history',   value: 0, link: '/admin/upcoming-quizzes' },
   { title: 'Reports',          icon: 'bi bi-bar-chart',       value: '→', link: '/admin/reports' }
 ])
 
@@ -73,26 +73,39 @@ const recent = ref([])
 
 onMounted(async () => {
   try {
-    const [usersRes, quizzesRes, questionsRes, subjectRes, recentRes] = await Promise.all([
-      axios.get('/api/admin/users', { withCredentials: true }),
-      axios.get('/api/admin/quizzes', { withCredentials: true }),
+    const [
+      usersRes,
+      quizzesRes,
+      _questionsRes,
+      subjectRes,
+      recentRes
+    ] = await Promise.all([
+      axios.get('/api/admin/users'),
+      axios.get('/api/admin/quizzes'),
       axios.get('/api/admin/questions'),
       axios.get('/api/admin/subjects'),
       axios.get('/api/admin/recent-activity')
     ])
 
-    const users = usersRes.data || []
-    const nonAdmins = users.filter(u => !u.is_admin)
-
-     const upcomingQuizzes = (quizzesRes.data || []).filter(q => new Date(q.date_of_quiz) > new Date())
-
-
+    // 1) Count non-admin users
+    const nonAdmins = usersRes.data.filter(u => !u.is_admin)
     cards.value[0].value = nonAdmins.length
-    cards.value[1].value = subjectRes.data?.length || 0
-    cards.value[2].value = upcomingQuizzes.length
 
-    // Recent activity from backend
-    recent.value = recentRes.data || []
+    // 2) Subject count
+    cards.value[1].value = subjectRes.data.length
+
+    // 3) Upcoming quizzes: filter by future deadline
+    const now = new Date()
+    const upcoming = quizzesRes.data.filter(q =>
+      q.deadline && new Date(q.deadline) > now
+    )
+    cards.value[2].value = upcoming.length
+
+    // 4) Recent activity
+    recent.value = recentRes.data.map(item => ({
+      ...item,
+      when: item.when ?? item.timestamp ?? item.created_at ?? null
+    }))
   } catch (e) {
     console.error('Dashboard loading error:', e)
   }
@@ -101,7 +114,16 @@ onMounted(async () => {
 function formatDate(isoString) {
   if (!isoString) return '—'
   const date = new Date(isoString)
-  return isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleString()
+  // IST offset: +5:30
+  const istMs = date.getTime() + 5.5 * 3600 * 1000
+  return new Date(istMs).toLocaleString('en-IN', {
+    year:   'numeric',
+    month:  'short',
+    day:    'numeric',
+    hour:   '2-digit',
+    minute: '2-digit',
+    hour12: true
+  })
 }
 </script>
 

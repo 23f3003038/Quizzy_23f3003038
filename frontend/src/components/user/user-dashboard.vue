@@ -17,8 +17,8 @@
 
     <!-- Stats Summary -->
     <div class="row g-3 mb-4">
-      <div class="col-md-3" v-for="(stat, index) in stats" :key="index">
-        <div class="card stat-box text-center shadow-sm">
+      <div class="col-md-3 d-flex" v-for="(stat, index) in stats" :key="index">
+        <div class="card stat-box text-center shadow-sm p-3 flex-fill">
           <div class="card-body">
             <div class="stat-value">{{ stat.value }}</div>
             <div class="stat-label text-muted">{{ stat.label }}</div>
@@ -47,7 +47,7 @@
           <td>{{ attempt.accuracy }}</td>
           <td>{{ attempt.completed_at_ist }}</td>
           <td>
-            <button class="btn btn-sm btn-outline-primary" @click="viewReport(attempt.id)">
+            <button class="btn btn-sm btn-outline-primary" @click="viewResult(attempt.id)">
               View
             </button>
           </td>
@@ -185,9 +185,8 @@ function changePage(newPage) {
   fetchHistory(newPage)
 }
 
-function viewReport(scoreId) {
-  console.log('Navigating to report with scoreId:', scoreId)
-  router.push(`/user/report/${scoreId}`)
+function viewResult(attemptId) {
+  router.push({ name: 'UserQuizResult', params: { attemptId } })
 }
 
 function exportHistory() {
@@ -219,15 +218,16 @@ onMounted(() => {
 .stat-box {
   background-color: #e0f7f1;
   border-radius: 8px;
+
 }
 
 .stat-value {
-  font-size: 1.8rem;
+  font-size: 1.2rem;
   font-weight: bold;
   color: #14518f;
 }
 
 .stat-label {
-  font-size: 0.95rem;
+  font-size: 1.5rem;
 }
 </style>

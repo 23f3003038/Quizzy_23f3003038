@@ -47,7 +47,7 @@
         <tbody>
           <tr v-if="filteredQuestions.length === 0">
             <td colspan="4" class="text-center text-muted py-4">
-              No results found.
+              No questions found.
             </td>
           </tr>
           <tr v-for="(question, index) in filteredQuestions" :key="question.id">

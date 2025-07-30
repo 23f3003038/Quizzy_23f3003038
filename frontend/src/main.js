@@ -11,6 +11,8 @@ import router from './router'
 import { Chart, registerables } from 'chart.js'
 Chart.register(...registerables)
 
+import 'chartjs-adapter-date-fns'
+
 // ——— Axios global configuration ———
 axios.defaults.baseURL = 'http://localhost:5000'
 const token = localStorage.getItem('access_token')

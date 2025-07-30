@@ -6,6 +6,7 @@ from functools import wraps
 from models import db, Subject, Chapter, Quiz, Question, User, Score, ActivityLog
 from datetime import datetime, timedelta
 from extensions import cache, limiter
+from sqlalchemy import func
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -71,6 +72,7 @@ def modify_subject(id):
         subj.description = data.get("description")
         db.session.commit()
         cache.delete("admin_subject_list")
+        cache.delete(f"subject_detail_{id}")
         return jsonify(id=subj.id, name=subj.name, description=subj.description), 200
     else:
         db.session.delete(subj)
@@ -118,6 +120,7 @@ def modify_chapter(id):
         chap.name = data["name"]
         chap.description = data.get("description")
         db.session.commit()
+        cache.delete(f"chapter_detail_{id}")
         return jsonify(id=chap.id, name=chap.name, description=chap.description), 200
     else:
         db.session.delete(chap)
@@ -452,17 +455,27 @@ def modify_question(id):
 @limiter.limit("10 per minute")
 def list_users():
     users = User.query.all()
-    return jsonify([
-        {
+    out = []
+    for u in users:
+        # find latest score timestamp
+        last_score = (
+            Score.query
+            .filter_by(user_id=u.id)
+            .order_by(Score.timestamp.desc())
+            .first()
+        )
+        last_active = last_score.timestamp.isoformat() if last_score else None
+
+        out.append({
             "id": u.id,
             "email": u.email,
             "full_name": u.full_name,
             "qualification": u.qualification,
             "dob": u.dob.isoformat() if u.dob else None,
-            "is_admin": u.is_admin
-        }
-        for u in users
-    ]), 200
+            "is_admin": u.is_admin,
+            "last_active": last_active
+        })
+    return jsonify(out), 200
 
 @admin_bp.route("/recent-activity", methods=["GET"])
 @require_admin
@@ -502,31 +515,61 @@ def get_user_by_id(user_id):
 @limiter.limit("5 per minute")
 def user_stats(user_id):
     user = User.query.get_or_404(user_id)
+
+    # fetch all attempts
     scores = Score.query.filter_by(user_id=user_id).all()
-    total = len(scores)
-    avg = round(sum(s.total_score for s in scores) / total, 2) if total else 0
-    last = max((s.timestamp for s in scores), default=None)
+    total_quizzes = len(scores)
+
+    # build list of per‑quiz percentages
+    percs = []
+    for s in scores:
+        num_q = len(s.quiz.questions)
+        if num_q:
+            percs.append((s.total_score / num_q) * 100)
+
+    avg_score = round(sum(percs) / len(percs), 2) if percs else 0
+
+    last_active = max((s.timestamp for s in scores), default=None)
+
     return jsonify({
-        "totalQuizzes": total,
-        "avgScore": avg,
-        "lastActive": last.isoformat() if last else None
+        "totalQuizzes": total_quizzes,
+        "avgScore":     avg_score,                                        # now a true percentage
+        "lastActive":   (last_active.isoformat() + "Z") if last_active else None
     }), 200
+
 
 @admin_bp.route("/users/<int:user_id>/activity", methods=["GET"])
 @require_admin
 @cache.cached(timeout=60 * 5, key_prefix=lambda: f"user_activity_{request.view_args['user_id']}")
 @limiter.limit("5 per minute")
 def user_activity(user_id):
-    scores = Score.query.filter_by(user_id=user_id).order_by(Score.timestamp.desc()).limit(10).all()
-    return jsonify([
-        {
-            "quiz": s.quiz.id,
-            "subject": s.quiz.chapter.subject.name,
-            "score": s.total_score,
-            "accuracy": s.accuracy,
-            "completed_at": s.timestamp.isoformat()
-        } for s in scores
-    ]), 200
+    # Pull the last 10 scores for this user
+    scores = (
+        Score.query
+        .filter_by(user_id=user_id)
+        .order_by(Score.timestamp.desc())
+        .limit(10)
+        .all()
+    )
+
+    activity = []
+    for s in scores:
+        quiz = s.quiz  # Assuming you have a backref from Score → Quiz
+        # Count how many questions this quiz had
+        total_questions = len(quiz.questions)
+        # Compute percentage accuracy
+        accuracy_pct = round((s.total_score / total_questions) * 100, 2) if total_questions else 0
+
+        activity.append({
+            "quiz":          quiz.id,
+            "subject":       quiz.chapter.subject.name,
+            "score":         s.total_score,
+            "accuracy":      accuracy_pct,                       # send number; frontend adds "%"
+            "completed_at":  s.timestamp.isoformat() + "Z"      # include trailing Z for UTC
+        })
+
+    return jsonify(activity), 200
+
 
 @admin_bp.route("/me", methods=["GET", "OPTIONS"])
 def get_admin_me():
@@ -535,7 +578,7 @@ def get_admin_me():
     
     verify_jwt_in_request()
 
-    # 🔒 Ensure user is an admin
+    # Ensure user is an admin
     claims = get_jwt()
     if not claims.get("is_admin"):
         return jsonify(msg="Admins only"), 403
@@ -586,3 +629,54 @@ def get_chapter_by_id(id):
             } for q in quizzes
         ]
     }), 200
+
+
+@admin_bp.route("/scores", methods=["GET"])
+@require_admin
+@limiter.limit("20 per minute")
+def list_all_scores():
+    """
+    GET /api/admin/scores
+    Returns every score record with enough context for reporting.
+    """
+    rows = (
+        db.session.query(
+            Score.id.label('score_id'),
+            Score.user_id,
+            Score.total_score,
+            Score.timestamp,
+            Quiz.id.label('quiz_id'),
+            Quiz.name.label('quiz_name'),
+            Chapter.id.label('chapter_id'),
+            Chapter.name.label('chapter_name'),
+            Subject.id.label('subject_id'),
+            Subject.name.label('subject_name'),
+        )
+        .join(Quiz, Quiz.id == Score.quiz_id)
+        .join(Chapter, Chapter.id == Quiz.chapter_id)
+        .join(Subject, Subject.id == Chapter.subject_id)
+        .all()
+    )
+
+    result = []
+    for r in rows:
+        total_questions = len(Quiz.query.get(r.quiz_id).questions)
+        accuracy = round((r.total_score / total_questions) * 100, 2) if total_questions else 0
+
+        result.append({
+            "score_id":      r.score_id,
+            "user_id":       r.user_id,
+            "quiz_id":       r.quiz_id,
+            "quiz_name":     r.quiz_name,
+            "chapter_id":    r.chapter_id,
+            "chapter_name":  r.chapter_name,
+            "subject_id":    r.subject_id,
+            "subject_name":  r.subject_name,
+            "total_score":   r.total_score,
+            "total_questions": total_questions,
+            "accuracy":      f"{accuracy}%",
+            "accuracy_num":  accuracy,
+            "timestamp":     r.timestamp.isoformat() + 'Z'
+        })
+
+    return jsonify(result), 200

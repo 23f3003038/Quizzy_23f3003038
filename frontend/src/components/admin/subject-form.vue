@@ -138,7 +138,7 @@ function save() {
 
   req
     .then((res) => {
-      showToastMessage('✅ Subject saved!', 'success')
+      showToastMessage('✅ Subject created!', 'success')
       setTimeout(() => {
         emit('saved')
         emit('close')

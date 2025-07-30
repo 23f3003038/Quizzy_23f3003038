@@ -36,7 +36,7 @@
 
     <!-- Chapters Table -->
     <div class="table-responsive">
-      <table class="table table-hover" v-if="filteredChapters.length > 0">
+      <table class="table table-hover table-fixed" v-if="filteredChapters.length > 0">
         <thead>
           <tr>
             <th>Chapter Name</th>
@@ -202,4 +202,36 @@ onMounted(() => {
 .table  th{
   font-weight: bold
 }
+
+.table-fixed {
+  table-layout: fixed;
+  width: 100%;
+}
+
+/* 2. ellipsis on overflow */
+.table-fixed th,
+.table-fixed td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 3. assign each column a percentage */
+.table-fixed th:nth-child(1),
+.table-fixed td:nth-child(1) {
+  width: 25%;   /* Chapter Name */
+}
+.table-fixed th:nth-child(2),
+.table-fixed td:nth-child(2) {
+  width: 45%;   /* Description */
+}
+.table-fixed th:nth-child(3),
+.table-fixed td:nth-child(3) {
+  width: 20%;   /* Quizzes */
+}
+.table-fixed th:nth-child(4),
+.table-fixed td:nth-child(4) {
+  width: 20%;   /* Actions */
+}
+
 </style>
